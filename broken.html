@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>屏幕破碎故障特效</title>
+    <style>
+        body {
+            /* 设置深色背景并将画布居中 */
+            background-color: #111;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        canvas {
+            /* 模拟手机屏幕的比例和边框发光 */
+            background-color: #000;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+            border: 2px solid #333;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="brokenScreen" width="400" height="700"></canvas>
+
+<script>
+    const canvas = document.getElementById('brokenScreen');
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // 裂纹的中心点（模拟撞击位置）
+    const impactX = width * 0.75;
+    const impactY = height * 0.25;
+
+    // 1. 绘制密集的垂直彩色故障线
+    function drawGlitchLines() {
+        // 覆盖一层半透明黑色以产生闪烁感
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+        ctx.fillRect(0, 0, width, height);
+
+        const colors = ['#FF0000', '#00FF00', '#0000FF', '#00FFFF', '#FF00FF', '#FFFFFF'];
+        
+        // 随机生成垂直线条
+        for (let i = 0; i < width; i += Math.random() * 3) {
+            if (Math.random() > 0.4) {
+                ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+                // 随机线条宽度和透明度
+                const lineWidth = Math.random() * 2 + 0.5;
+                ctx.globalAlpha = Math.random() * 0.8;
+                ctx.fillRect(i, 0, lineWidth, height);
+            }
+        }
+        ctx.globalAlpha = 1.0; // 重置透明度
+    }
+
+    // 2. 绘制漏液导致的黑色死皮区域（黑斑）
+    function drawDeadPixels() {
+        ctx.fillStyle = '#000000';
+        ctx.beginPath();
+        
+        // 使用多边形模拟不规则的漏液黑斑
+        ctx.moveTo(impactX - 20, impactY + 10);
+        ctx.lineTo(width, impactY - 50);
+        ctx.lineTo(width, height);
+        ctx.lineTo(0, height);
+        ctx.lineTo(0, height * 0.6);
+        ctx.lineTo(width * 0.3, height * 0.5);
+        ctx.lineTo(width * 0.4, height * 0.8);
+        ctx.lineTo(width * 0.6, height * 0.4);
+        
+        ctx.fill();
+    }
+
+    // 3. 生成放射状蜘蛛网裂纹
+    function drawCracks() {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; // 白色裂纹
+        ctx.lineWidth = 1;
+
+        // 绘制主放射线
+        for (let i = 0; i < 20; i++) {
+            ctx.beginPath();
+            ctx.moveTo(impactX, impactY);
+            
+            const angle = Math.random() * Math.PI * 2;
+            const length = Math.random() * 400 + 50;
+            
+            let currX = impactX;
+            let currY = impactY;
+            
+            // 将长直线分成几段，产生曲折感
+            const segments = Math.floor(Math.random() * 5) + 3;
+            for (let j = 0; j < segments; j++) {
+                const segmentLength = length / segments;
+                // 添加随机偏移让裂纹不那么笔直
+                const offsetX = (Math.random() - 0.5) * 40;
+                const offsetY = (Math.random() - 0.5) * 40;
+                
+                currX += Math.cos(angle) * segmentLength + offsetX;
+                currY += Math.sin(angle) * segmentLength + offsetY;
+                
+                ctx.lineTo(currX, currY);
+            }
+            ctx.stroke();
+        }
+    }
+
+    // 主渲染循环
+    function render() {
+        // 先画动态故障线
+        drawGlitchLines();
+        
+        // 再覆盖黑色区域和裂纹，使其不受彩色线条完全覆盖
+        drawDeadPixels();
+        drawCracks();
+    }
+
+    // 初始渲染一次裂纹和黑斑（静态层）
+    drawDeadPixels();
+    drawCracks();
+
+    // 设置定时器，让彩色条纹不断闪烁，模拟屏幕故障
+    setInterval(render, 80); 
+
+</script>
+</body>
+</html>
