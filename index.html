@@ -2,272 +2,284 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>互动屏幕故障实验室</title>
+    <title>裂纹生成器 - 工作区</title>
     <style>
-        body {
-            background-color: #1a1a1a;
-            color: #eeeeee;
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin: 0;
-            padding: 2vh 0;
-            min-height: 100vh;
+        /* 模拟 Adobe 软件界面风格的 CSS */
+        body, html { 
+            margin: 0; 
+            padding: 0; 
+            background-color: #232323; 
+            color: #b3b3b3; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden;
         }
-        .container {
-            display: flex;
-            gap: 30px;
-            align-items: flex-start;
+        
+        /* 顶部工具栏 */
+        .toolbar { 
+            background-color: #333333; 
+            padding: 10px 20px; 
+            display: flex; 
+            gap: 15px; 
+            align-items: center; 
+            border-bottom: 1px solid #1a1a1a; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3); 
+            z-index: 10; 
         }
-        canvas {
-            background-color: #050505;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.9);
-            border: 2px solid #333;
-            border-radius: 12px;
-            cursor: crosshair; /* 提示可以点击 */
+        
+        .branding { 
+            font-weight: 600; 
+            color: #ffffff; 
+            margin-right: 20px; 
+            font-size: 14px; 
+            letter-spacing: 1px; 
         }
-        .control-panel {
-            background-color: #2a2a2a;
-            padding: 20px;
-            border-radius: 12px;
-            width: 300px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        
+        /* 按钮样式 */
+        button { 
+            background-color: #4a4a4a; 
+            border: 1px solid #2a2a2a; 
+            color: #e0e0e0; 
+            padding: 6px 16px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 12px; 
+            transition: background 0.2s; 
         }
-        .control-panel h3 {
-            margin-top: 0;
-            border-bottom: 1px solid #444;
-            padding-bottom: 10px;
+        
+        button:hover { background-color: #5a5a5a; }
+        button:active { background-color: #3a3a3a; border-color: #111; }
+        
+        /* 模式切换组 */
+        .toggle-group { 
+            display: flex; 
+            border: 1px solid #2a2a2a; 
+            border-radius: 4px; 
+            overflow: hidden; 
+            margin-right: 15px;
         }
-        .control-group {
-            margin-bottom: 15px;
-            display: flex;
-            flex-direction: column;
+        
+        .toggle-btn { 
+            background-color: #333333; 
+            border: none; 
+            border-radius: 0;
+            color: #888; 
+            padding: 6px 16px; 
         }
-        .control-group label {
-            margin-bottom: 5px;
-            font-size: 14px;
+        
+        .toggle-btn.active { 
+            background-color: #535353; 
+            color: #ffffff; 
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+        }
+        
+        /* 中心工作区 */
+        .workspace { 
+            flex: 1; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            background-color: #1a1a1a; 
+            padding: 40px; 
+            position: relative; 
+            overflow: auto;
+        }
+        
+        /* 画布容器，添加阴影模拟图层 */
+        .canvas-container { 
+            box-shadow: 0 4px 25px rgba(0,0,0,0.8); 
+            border: 1px solid #000; 
+        }
+        
+        /* 核心画布：20:1 比例 */
+        canvas { 
+            display: block; 
+            background-color: #ffffff; 
+            cursor: crosshair; 
+        }
+        
+        /* 底部状态栏 */
+        .status-bar { 
+            background-color: #2a2a2a; 
+            padding: 4px 15px; 
+            font-size: 11px; 
+            color: #888; 
+            border-top: 1px solid #111; 
             display: flex;
             justify-content: space-between;
-        }
-        .control-group input[type="range"] {
-            width: 100%;
-        }
-        select {
-            background-color: #444;
-            color: white;
-            border: 1px solid #555;
-            padding: 5px;
-            border-radius: 4px;
-        }
-        .hint {
-            font-size: 12px;
-            color: #aaa;
-            margin-top: 15px;
-            text-align: center;
         }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <canvas id="brokenScreen" width="380" height="680"></canvas>
-
-    <div class="control-panel">
-        <h3>控制台</h3>
+    <div class="toolbar">
+        <div class="branding">FRACTURE FX</div>
         
-        <div class="control-group">
-            <label>故障强度 (Intensity) <span id="valIntensity">0.9</span></label>
-            <input type="range" id="ctrlIntensity" min="0" max="1" step="0.05" value="0.9">
+        <div class="toggle-group">
+            <button class="toggle-btn active" id="btnStatic">静态模式</button>
+            <button class="toggle-btn" id="btnDynamic">动态模式</button>
         </div>
-
-        <div class="control-group">
-            <label>条纹密度 (Density)</label>
-            <select id="ctrlDensity">
-                <option value="10">低</option>
-                <option value="5">中</option>
-                <option value="2" selected>高</option>
-            </select>
-        </div>
-
-        <div class="control-group">
-            <label>色调偏移 (Hue Shift) <span id="valHue">0</span></label>
-            <input type="range" id="ctrlHue" min="0" max="360" step="1" value="0">
-        </div>
-
-        <div class="control-group">
-            <label>裂纹 X 轴 <span id="valX">0.75</span></label>
-            <input type="range" id="ctrlX" min="0" max="1" step="0.01" value="0.75">
-        </div>
-
-        <div class="control-group">
-            <label>裂纹 Y 轴 <span id="valY">0.25</span></label>
-            <input type="range" id="ctrlY" min="0" max="1" step="0.01" value="0.25">
-        </div>
-
-        <div class="hint">💡 提示：你可以直接点击左侧屏幕来砸出新的裂纹。</div>
+        
+        <button id="btnRandom">随机生成</button>
+        <button id="btnClear">清空图层</button>
     </div>
-</div>
 
-<script>
-    const canvas = document.getElementById('brokenScreen');
-    const ctx = canvas.getContext('2d');
-    const width = canvas.width;
-    const height = canvas.height;
+    <div class="workspace">
+        <div class="canvas-container">
+            <canvas id="mainCanvas" width="2000" height="100"></canvas>
+        </div>
+    </div>
 
-    // --- 状态变量 (映射控件) ---
-    let state = {
-        intensity: 0.9,
-        density: 2,
-        hueShift: 0,
-        impactX: width * 0.75,
-        impactY: height * 0.25
-    };
+    <div class="status-bar">
+        <span id="statusText">就绪 - 静态模式</span>
+        <span>画布尺寸: 2000 x 100 px (20:1)</span>
+    </div>
 
-    // --- 绑定控件事件 ---
-    document.getElementById('ctrlIntensity').addEventListener('input', (e) => {
-        state.intensity = parseFloat(e.target.value);
-        document.getElementById('valIntensity').innerText = state.intensity.toFixed(2);
-    });
-    
-    document.getElementById('ctrlDensity').addEventListener('change', (e) => {
-        state.density = parseInt(e.target.value);
-    });
-
-    document.getElementById('ctrlHue').addEventListener('input', (e) => {
-        state.hueShift = parseInt(e.target.value);
-        document.getElementById('valHue').innerText = state.hueShift;
-    });
-
-    // X轴滑块更新
-    const ctrlX = document.getElementById('ctrlX');
-    ctrlX.addEventListener('input', (e) => {
-        state.impactX = parseFloat(e.target.value) * width;
-        document.getElementById('valX').innerText = e.target.value;
-    });
-
-    // Y轴滑块更新
-    const ctrlY = document.getElementById('ctrlY');
-    ctrlY.addEventListener('input', (e) => {
-        state.impactY = parseFloat(e.target.value) * height;
-        document.getElementById('valY').innerText = e.target.value;
-    });
-
-    // 画布点击事件：直接更新撞击点
-    canvas.addEventListener('mousedown', (e) => {
-        const rect = canvas.getBoundingClientRect();
-        state.impactX = e.clientX - rect.left;
-        state.impactY = e.clientY - rect.top;
+    <script>
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusText = document.getElementById('statusText');
         
-        // 同步更新滑块 UI
-        const normX = (state.impactX / width).toFixed(2);
-        const normY = (state.impactY / height).toFixed(2);
-        ctrlX.value = normX; document.getElementById('valX').innerText = normX;
-        ctrlY.value = normY; document.getElementById('valY').innerText = normY;
-    });
+        let isDynamic = false;
+        let cracksArray = [];
+        let animationId;
 
-    // --- 绘图逻辑 ---
+        // 生成单次裂纹的数据结构
+        function generateCrackData(originX, originY) {
+            const crackLines = [];
+            // 生成 5 到 12 条主分支
+            const branches = Math.floor(Math.random() * 8) + 5; 
+            
+            for (let i = 0; i < branches; i++) {
+                // 放射状角度，加入一点随机偏移
+                const angle = (Math.PI * 2 / branches) * i + (Math.random() * 0.5 - 0.25);
+                // 裂纹长度（100高度的画布，长度在 30-150 之间足以贯穿）
+                const length = Math.random() * 120 + 30; 
+                
+                const points = [];
+                // 将每条裂纹分为几段，产生曲折感
+                const segments = Math.floor(Math.random() * 4) + 3;
+                let currentX = originX;
+                let currentY = originY;
+                
+                for (let j = 0; j < segments; j++) {
+                    const segmentLength = length / segments;
+                    const jitterX = (Math.random() - 0.5) * 15;
+                    const jitterY = (Math.random() - 0.5) * 15;
+                    currentX += Math.cos(angle) * segmentLength + jitterX;
+                    currentY += Math.sin(angle) * segmentLength + jitterY;
+                    points.push({ x: currentX, y: currentY });
+                }
+                crackLines.push({ points, angle });
+            }
+            return { x: originX, y: originY, lines: crackLines };
+        }
 
-    function drawGlitchLines() {
-        // 清理背景，留下轻微残影
-        ctx.fillStyle = `rgba(0, 0, 0, ${1 - state.intensity * 0.5})`;
-        ctx.fillRect(0, 0, width, height);
+        // 核心渲染引擎
+        function renderScene() {
+            // 填充纯白背景
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // 基于密度参数控制线条数量
-        for (let i = 0; i < width; i += (Math.random() * state.density + 1)) {
-            // 基于强度决定是否绘制这条线
-            if (Math.random() < state.intensity) {
-                // 使用 HSL 颜色空间，方便进行色调偏移
-                const baseHues = [0, 120, 240, 180, 300]; // 红绿蓝青洋红
-                const randomHue = baseHues[Math.floor(Math.random() * baseHues.length)];
-                const finalHue = (randomHue + state.hueShift) % 360;
+            cracksArray.forEach(crack => {
+                // 画布底色是白色，裂纹用极深的灰色/黑色
                 
-                // 偶尔混入白色
-                const isWhite = Math.random() > 0.8;
-                ctx.fillStyle = isWhite ? 'white' : `hsl(${finalHue}, 100%, 50%)`;
-                
-                const lineWidth = Math.random() * 3 * state.intensity;
-                ctx.globalAlpha = Math.random() * state.intensity;
-                
-                // 模拟画面撕裂：某些线条不贯穿整个屏幕
-                const startY = Math.random() > 0.8 ? Math.random() * height : 0;
-                const endY = Math.random() > 0.8 ? Math.random() * height : height;
-                
-                ctx.fillRect(i, startY, lineWidth, endY - startY);
+                // 绘制撞击中心点
+                ctx.fillStyle = '#111111';
+                ctx.beginPath();
+                // 动态模式下撞击点会轻微抖动
+                const radius = isDynamic ? Math.random() * 1 + 1 : 1.5;
+                ctx.arc(crack.x, crack.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 绘制裂纹网
+                crack.lines.forEach(line => {
+                    ctx.beginPath();
+                    ctx.moveTo(crack.x, crack.y);
+                    
+                    line.points.forEach(p => {
+                        // 动态模式下赋予坐标随机偏移（Jitter）来产生毛刺/抖动感
+                        const dx = isDynamic ? (Math.random() - 0.5) * 2 : 0;
+                        const dy = isDynamic ? (Math.random() - 0.5) * 2 : 0;
+                        ctx.lineTo(p.x + dx, p.y + dy);
+                    });
+                    
+                    // 动态模式下透明度和线宽会闪烁
+                    const alpha = isDynamic ? 0.6 + Math.random() * 0.4 : 0.85;
+                    ctx.strokeStyle = `rgba(15, 15, 15, ${alpha})`;
+                    ctx.lineWidth = isDynamic ? Math.random() * 0.8 + 0.5 : 0.8;
+                    ctx.stroke();
+                });
+            });
+
+            // 循环控制
+            if (isDynamic) {
+                animationId = requestAnimationFrame(renderScene);
             }
         }
-        ctx.globalAlpha = 1.0;
-    }
 
-    // 绘制基于撞击点生成的漏液黑斑
-    function drawDeadPixels() {
-        ctx.fillStyle = '#000000';
-        ctx.beginPath();
-        
-        // 以撞击点为核心，向左下角蔓延的死像素区
-        ctx.moveTo(state.impactX - 10, state.impactY + 10);
-        ctx.lineTo(width, state.impactY - 30);
-        ctx.lineTo(width, height);
-        ctx.lineTo(0, height);
-        
-        // 动态计算边缘，使其看起来受到原点位置影响
-        ctx.lineTo(0, state.impactY + 150);
-        ctx.lineTo(state.impactX * 0.4, state.impactY + 80);
-        ctx.lineTo(state.impactX * 0.6, state.impactY + 120);
-        
-        ctx.fill();
-    }
+        // --- 交互控制逻辑 ---
 
-    // 绘制基于撞击点的放射状裂纹
-    function drawCracks() {
-        ctx.strokeStyle = 'rgba(200, 255, 255, 0.6)';
-        ctx.lineWidth = 1;
+        // 1. 鼠标点击画布生成
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            // 处理 CSS 缩放比例与实际像素的映射
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+            
+            cracksArray.push(generateCrackData(x, y));
+            if (!isDynamic) renderScene(); // 静态模式下手动触发重绘
+            
+            statusText.innerText = `已添加裂纹 (X: ${Math.round(x)}, Y: ${Math.round(y)})`;
+        });
 
-        // 固定一个随机种子以保持裂纹形状稳定，而不是每帧乱闪
-        // 这里简化处理，通过固定算法生成伪随机
-        for (let i = 0; i < 25; i++) {
-            ctx.beginPath();
-            ctx.moveTo(state.impactX, state.impactY);
-            
-            // 使用伪随机角度分布
-            const angle = (i / 25) * Math.PI * 2 + (i % 3 * 0.1); 
-            const length = (i % 5 + 1) * 80; // 不同长度的裂纹
-            
-            let currX = state.impactX;
-            let currY = state.impactY;
-            
-            const segments = 4;
-            for (let j = 0; j < segments; j++) {
-                const segmentLength = length / segments;
-                // 固定的偏移量计算方式
-                const offsetX = Math.sin(i * j) * 15; 
-                const offsetY = Math.cos(i * j) * 15;
-                
-                currX += Math.cos(angle) * segmentLength + offsetX;
-                currY += Math.sin(angle) * segmentLength + offsetY;
-                
-                ctx.lineTo(currX, currY);
+        // 2. 随机生成按钮
+        document.getElementById('btnRandom').addEventListener('click', () => {
+            const x = Math.random() * canvas.width;
+            const y = Math.random() * canvas.height;
+            cracksArray.push(generateCrackData(x, y));
+            if (!isDynamic) renderScene();
+            statusText.innerText = `随机生成裂纹 (X: ${Math.round(x)}, Y: ${Math.round(y)})`;
+        });
+
+        // 3. 清空图层
+        document.getElementById('btnClear').addEventListener('click', () => {
+            cracksArray = [];
+            if (!isDynamic) renderScene();
+            statusText.innerText = '图层已清空';
+        });
+
+        // 4. 模式切换开关
+        const btnStatic = document.getElementById('btnStatic');
+        const btnDynamic = document.getElementById('btnDynamic');
+
+        function toggleMode(dynamic) {
+            isDynamic = dynamic;
+            if (dynamic) {
+                btnDynamic.classList.add('active');
+                btnStatic.classList.remove('active');
+                statusText.innerText = '动态模式启动 (持续渲染)';
+                renderScene(); // 启动动画循环
+            } else {
+                btnStatic.classList.add('active');
+                btnDynamic.classList.remove('active');
+                cancelAnimationFrame(animationId);
+                statusText.innerText = '已切换为静态模式';
+                renderScene(); // 渲染最后一帧干净的画面
             }
-            ctx.stroke();
         }
-    }
 
-    // 主循环
-    function render() {
-        drawGlitchLines();
-        drawDeadPixels();
-        drawCracks();
-        
-        // 使用 requestAnimationFrame 让动画更平滑
-        // 通过 setTimeout 稍微降帧以模拟屏幕闪烁的滞后感
-        setTimeout(() => {
-            requestAnimationFrame(render);
-        }, 50); 
-    }
+        btnStatic.addEventListener('click', () => toggleMode(false));
+        btnDynamic.addEventListener('click', () => toggleMode(true));
 
-    // 启动
-    render();
+        // 初始渲染一次白色背景
+        renderScene();
 
-</script>
+    </script>
 </body>
 </html>
