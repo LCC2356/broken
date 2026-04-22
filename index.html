@@ -2,62 +2,68 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>裂纹生成器 - 工作区 (带黑斑修复版)</title>
+    <title>屏幕破碎实验室 - 专业版</title>
     <style>
-        /* 模拟 Adobe 软件界面风格的 CSS */
         body, html { 
-            margin: 0; 
-            padding: 0; 
-            background-color: #232323; 
-            color: #b3b3b3; 
+            margin: 0; padding: 0; background-color: #1e1e1e; color: #cccccc; 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            height: 100vh; 
-            display: flex; 
-            flex-direction: column; 
-            overflow: hidden;
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+            user-select: none;
         }
         
+        /* 顶部工具栏 */
         .toolbar { 
-            background-color: #333333; 
-            padding: 10px 20px; 
-            display: flex; 
-            gap: 15px; 
-            align-items: center; 
-            border-bottom: 1px solid #1a1a1a; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3); 
-            z-index: 10; 
+            background-color: #2d2d2d; padding: 12px 20px; display: flex; gap: 20px; 
+            align-items: center; border-bottom: 1px solid #111; box-shadow: 0 2px 10px rgba(0,0,0,0.5); 
+            z-index: 10; flex-wrap: wrap;
         }
         
-        .branding { font-weight: 600; color: #ffffff; margin-right: 20px; font-size: 14px; letter-spacing: 1px; }
+        .branding { font-weight: bold; color: #fff; letter-spacing: 1.5px; margin-right: 10px; }
+        
+        .control-group { display: flex; align-items: center; gap: 8px; background: #222; padding: 4px 8px; border-radius: 6px; border: 1px solid #333;}
+        .control-group label { font-size: 12px; color: #aaa; }
         
         button { 
-            background-color: #4a4a4a; border: 1px solid #2a2a2a; color: #e0e0e0; 
-            padding: 6px 16px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.2s; 
+            background-color: #444; border: 1px solid #555; color: #fff; 
+            padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: 0.2s; 
         }
-        button:hover { background-color: #5a5a5a; }
-        button:active { background-color: #3a3a3a; border-color: #111; }
+        button:hover { background-color: #555; border-color: #777;}
+        button:active { background-color: #333; }
+        button.active { background-color: #007acc; border-color: #0098ff; }
         
-        .toggle-group { display: flex; border: 1px solid #2a2a2a; border-radius: 4px; overflow: hidden; margin-right: 15px;}
-        .toggle-btn { background-color: #333333; border: none; border-radius: 0; color: #888; padding: 6px 16px; }
-        .toggle-btn.active { background-color: #535353; color: #ffffff; box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);}
+        /* 工作区 */
+        .workspace { 
+            flex: 1; display: flex; justify-content: center; align-items: center; 
+            background-color: #141414; background-image: radial-gradient(#222 1px, transparent 1px);
+            background-size: 20px 20px; overflow: auto; padding: 40px; position: relative;
+        }
         
-        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #1a1a1a; padding: 40px; overflow: auto;}
-        .canvas-container { box-shadow: 0 4px 25px rgba(0,0,0,0.8); border: 1px solid #000; }
+        .canvas-container { box-shadow: 0 10px 30px rgba(0,0,0,0.8); border: 1px solid #000; position: relative;}
         canvas { display: block; background-color: #ffffff; cursor: crosshair; }
         
-        .status-bar { background-color: #2a2a2a; padding: 4px 15px; font-size: 11px; color: #888; border-top: 1px solid #111; display: flex; justify-content: space-between;}
+        .status-bar { 
+            background-color: #007acc; padding: 4px 15px; font-size: 11px; color: #fff; 
+            display: flex; justify-content: space-between;
+        }
     </style>
 </head>
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE FX</div>
-        <div class="toggle-group">
-            <button class="toggle-btn active" id="btnStatic">静态模式</button>
-            <button class="toggle-btn" id="btnDynamic">动态模式</button>
+        <div class="branding">GLITCH FRACTURE PRO</div>
+        
+        <div class="control-group">
+            <button id="btnStatic" class="active">静态渲染</button>
+            <button id="btnDynamic">动态闪烁</button>
         </div>
-        <button id="btnRandom">随机生成</button>
-        <button id="btnClear">清空图层</button>
+
+        <div class="control-group">
+            <label>色调偏移</label>
+            <input type="range" id="ctrlHue" min="0" max="360" value="120" style="width: 100px;">
+        </div>
+        
+        <button id="btnRandom">随机砸击</button>
+        <button id="btnClear">清空画板</button>
     </div>
 
     <div class="workspace">
@@ -67,8 +73,8 @@
     </div>
 
     <div class="status-bar">
-        <span id="statusText">就绪 - 静态模式</span>
-        <span>画布尺寸: 2000 x 100 px (20:1)</span>
+        <span id="statusText">就绪。点击白色画布生成物理破碎。</span>
+        <span>画布比例: 20:1 (2000x100)</span>
     </div>
 
     <script>
@@ -77,148 +83,259 @@
         const statusText = document.getElementById('statusText');
         
         let isDynamic = false;
-        let cracksArray = [];
+        let baseHue = 120; // 默认偏绿色调，匹配你的参考图
+        let impacts = []; // 存储所有的撞击事件及其碎片
         let animationId;
 
-        // 生成单次裂纹和中心漏液黑斑的数据结构
-        function generateCrackData(originX, originY) {
-            const crackLines = [];
-            const holePoints = [];
+        document.getElementById('ctrlHue').addEventListener('input', (e) => {
+            baseHue = parseInt(e.target.value);
+            if (!isDynamic) render();
+        });
+
+        // ----------------------------------------------------
+        // 核心数学引擎：生成放射状物理碎片多边形
+        // ----------------------------------------------------
+        function generatePhysicalShards(originX, originY) {
+            const shards = [];
+            // 生成放射线角度 (加入随机扰动)
+            const rayCount = Math.floor(Math.random() * 8) + 10; // 10-18条放射线
+            const angles = [];
+            for(let i=0; i<rayCount; i++) {
+                angles.push((Math.PI * 2 / rayCount) * i + (Math.random() * 0.4 - 0.2));
+            }
+            angles.sort();
+
+            // 生成同心环半径，呈指数增长，以覆盖 2000px 的宽度
+            const rings = [0, 15, 40, 90, 200, 500, 1200, 2500]; 
             
-            // 1. 生成中心的“屏幕漏液/死像素”黑斑 (不规则多边形)
-            const holeSides = Math.floor(Math.random() * 6) + 5; // 5到10条边
-            for (let i = 0; i < holeSides; i++) {
-                const angle = (Math.PI * 2 / holeSides) * i + (Math.random() * 0.5);
-                // 黑斑的半径随机变化，形成锯齿状边缘
-                const radius = Math.random() * 15 + 5; 
-                holePoints.push({
-                    x: originX + Math.cos(angle) * radius,
-                    y: originY + Math.sin(angle) * radius
-                });
+            // 构建顶点网格网
+            const vertices = [];
+            for (let r = 0; r < rings.length; r++) {
+                const ringVertices = [];
+                for (let a = 0; a < rayCount; a++) {
+                    const radius = rings[r] + (r > 0 ? (Math.random() * rings[r] * 0.3) : 0); // 环的锯齿扰动
+                    const angle = angles[a];
+                    ringVertices.push({
+                        x: originX + Math.cos(angle) * radius,
+                        y: originY + Math.sin(angle) * radius
+                    });
+                }
+                vertices.push(ringVertices);
             }
 
-            // 2. 生成裂纹分支
-            const branches = Math.floor(Math.random() * 8) + 5; 
-            for (let i = 0; i < branches; i++) {
-                const angle = (Math.PI * 2 / branches) * i + (Math.random() * 0.5 - 0.25);
-                const length = Math.random() * 120 + 30; 
-                
-                const points = [];
-                const segments = Math.floor(Math.random() * 4) + 3;
-                let currentX = originX;
-                let currentY = originY;
-                
-                for (let j = 0; j < segments; j++) {
-                    const segmentLength = length / segments;
-                    const jitterX = (Math.random() - 0.5) * 15;
-                    const jitterY = (Math.random() - 0.5) * 15;
-                    currentX += Math.cos(angle) * segmentLength + jitterX;
-                    currentY += Math.sin(angle) * segmentLength + jitterY;
-                    points.push({ x: currentX, y: currentY });
+            // 根据顶点网格生成多边形碎片 (四边形或三角形)
+            for (let r = 0; r < rings.length - 1; r++) {
+                for (let a = 0; a < rayCount; a++) {
+                    const nextA = (a + 1) % rayCount;
+                    
+                    const p1 = vertices[r][a];
+                    const p2 = vertices[r+1][a];
+                    const p3 = vertices[r+1][nextA];
+                    const p4 = vertices[r][nextA];
+
+                    // 决定这个碎片的损坏属性
+                    let damageType = 'none';
+                    const rand = Math.random();
+                    
+                    // 越靠近中心 (r较小)，越容易出现黑斑或严重故障
+                    if (r === 0 || (r === 1 && rand > 0.5)) {
+                        damageType = 'black'; // 漏液死像素
+                    } else if (r <= 3 && rand > 0.3) {
+                        damageType = 'glitchLines'; // 彩色条纹
+                    } else if (r <= 5 && rand > 0.7) {
+                        damageType = 'glitchBlocks'; // 水平错位色块
+                    } else if (rand > 0.9) {
+                        damageType = 'glitchLines'; // 偶发远端故障
+                    }
+
+                    shards.push({
+                        polygon: [p1, p2, p3, p4],
+                        type: damageType,
+                        layer: r // 记录层级
+                    });
                 }
-                crackLines.push({ points, angle });
             }
-            return { x: originX, y: originY, lines: crackLines, holePoints: holePoints };
+            return { x: originX, y: originY, shards: shards };
         }
 
-        // 核心渲染引擎
-        function renderScene() {
+
+        // ----------------------------------------------------
+        // 渲染管线
+        // ----------------------------------------------------
+        
+        // 绘制彩色条纹故障
+        function fillGlitchLines(shard) {
+            const bbox = getBoundingBox(shard.polygon);
+            const density = 2; // 条纹密度
+            
+            for (let x = bbox.minX; x < Math.min(bbox.maxX, canvas.width); x += density + Math.random() * 2) {
+                if (Math.random() > 0.3) continue;
+                
+                // 动态模式下颜色随机抖动
+                const hueOffset = isDynamic ? (Math.random() * 40 - 20) : 0;
+                const finalHue = (baseHue + (Math.random() > 0.8 ? 180 : 0) + hueOffset) % 360; 
+                
+                ctx.fillStyle = Math.random() > 0.9 ? '#fff' : `hsl(${finalHue}, 100%, 50%)`;
+                ctx.globalAlpha = isDynamic ? Math.random() * 0.5 + 0.5 : 0.8;
+                
+                const lineWidth = Math.random() * 2 + 0.5;
+                ctx.fillRect(x, bbox.minY, lineWidth, bbox.maxY - bbox.minY);
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        // 绘制水平色块故障 (模拟信号错位)
+        function fillGlitchBlocks(shard) {
+            const bbox = getBoundingBox(shard.polygon);
+            const colors = ['#ff0055', '#00ffaa', '#0055ff', '#111'];
+            
+            for (let y = bbox.minY; y < bbox.maxY; y += Math.random() * 10 + 2) {
+                if (Math.random() > 0.5) continue;
+                
+                ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+                ctx.globalAlpha = isDynamic ? Math.random() * 0.8 + 0.2 : 0.7;
+                
+                const height = Math.random() * 4 + 1;
+                const width = (bbox.maxX - bbox.minX) * (Math.random() * 0.8 + 0.2);
+                const offsetX = isDynamic ? (Math.random() * 20 - 10) : 0;
+                
+                ctx.fillRect(bbox.minX + offsetX, y, width, height);
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        function getBoundingBox(polygon) {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            polygon.forEach(p => {
+                if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x;
+                if(p.y < minY) minY = p.y; if(p.y > maxY) maxY = p.y;
+            });
+            return {minX, minY, maxX, maxY};
+        }
+
+        // 主渲染函数
+        function render() {
+            // 填充纯白背景
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            cracksArray.forEach(crack => {
-                // 先绘制底部的“漏液黑斑”
-                ctx.fillStyle = '#0a0a0a'; // 极深的黑色
-                ctx.beginPath();
-                ctx.moveTo(crack.holePoints[0].x, crack.holePoints[0].y);
-                for(let i = 1; i < crack.holePoints.length; i++) {
-                    // 动态模式下黑斑边缘轻微抖动
-                    const dx = isDynamic ? (Math.random() - 0.5) * 2 : 0;
-                    const dy = isDynamic ? (Math.random() - 0.5) * 2 : 0;
-                    ctx.lineTo(crack.holePoints[i].x + dx, crack.holePoints[i].y + dy);
-                }
-                ctx.closePath();
-                ctx.fill();
+            impacts.forEach(impact => {
+                // 1. 遍历并渲染所有碎片内部的故障 (使用 Clip 裁剪)
+                impact.shards.forEach(shard => {
+                    if (shard.type === 'none') return; // 白色碎片跳过填充
 
-                // 绘制撞击极点
-                ctx.fillStyle = '#000000';
-                ctx.beginPath();
-                ctx.arc(crack.x, crack.y, 2, 0, Math.PI * 2);
-                ctx.fill();
-
-                // 绘制在黑斑之上的裂纹网
-                crack.lines.forEach(line => {
+                    ctx.save();
                     ctx.beginPath();
-                    ctx.moveTo(crack.x, crack.y);
+                    ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
+                    for(let i=1; i<shard.polygon.length; i++) {
+                        ctx.lineTo(shard.polygon[i].x, shard.polygon[i].y);
+                    }
+                    ctx.closePath();
                     
-                    line.points.forEach(p => {
-                        const dx = isDynamic ? (Math.random() - 0.5) * 2 : 0;
-                        const dy = isDynamic ? (Math.random() - 0.5) * 2 : 0;
-                        ctx.lineTo(p.x + dx, p.y + dy);
-                    });
-                    
-                    const alpha = isDynamic ? 0.6 + Math.random() * 0.4 : 0.85;
-                    ctx.strokeStyle = `rgba(15, 15, 15, ${alpha})`;
-                    ctx.lineWidth = isDynamic ? Math.random() * 0.8 + 0.5 : 0.8;
+                    // 核心：将绘制区域限制在这个多边形内
+                    ctx.clip(); 
+
+                    if (shard.type === 'black') {
+                        ctx.fillStyle = '#050505';
+                        ctx.fill();
+                    } else if (shard.type === 'glitchLines') {
+                        // 垫一层深色底
+                        ctx.fillStyle = '#111'; ctx.fill(); 
+                        fillGlitchLines(shard);
+                    } else if (shard.type === 'glitchBlocks') {
+                        ctx.fillStyle = '#222'; ctx.fill();
+                        fillGlitchBlocks(shard);
+                    }
+
+                    ctx.restore();
+                });
+
+                // 2. 绘制裂纹网 (碎片的边界线)
+                ctx.strokeStyle = 'rgba(10, 10, 10, 0.85)';
+                ctx.lineWidth = 1;
+                impact.shards.forEach(shard => {
+                    ctx.beginPath();
+                    ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
+                    for(let i=1; i<shard.polygon.length; i++) {
+                        ctx.lineTo(shard.polygon[i].x, shard.polygon[i].y);
+                    }
+                    // 不闭合路径以显得更自然
                     ctx.stroke();
                 });
+                
+                // 绘制撞击中心点
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(impact.x, impact.y, 2, 0, Math.PI*2);
+                ctx.fill();
             });
 
             if (isDynamic) {
-                animationId = requestAnimationFrame(renderScene);
+                // 控制帧率，不需要太流畅，以产生电子故障的卡顿感
+                setTimeout(() => {
+                    animationId = requestAnimationFrame(render);
+                }, 40);
             }
         }
 
-        // 绑定事件
+
+        // ----------------------------------------------------
+        // UI 交互绑定
+        // ----------------------------------------------------
+        
         canvas.addEventListener('mousedown', (e) => {
             const rect = canvas.getBoundingClientRect();
+            // 转换屏幕坐标到 Canvas 内部比例坐标
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
             const x = (e.clientX - rect.left) * scaleX;
             const y = (e.clientY - rect.top) * scaleY;
             
-            cracksArray.push(generateCrackData(x, y));
-            if (!isDynamic) renderScene(); 
-            statusText.innerText = `已添加裂纹 (X: ${Math.round(x)}, Y: ${Math.round(y)})`;
+            impacts.push(generatePhysicalShards(x, y));
+            if (!isDynamic) render();
+            statusText.innerText = `生成物理裂纹原点: X=${Math.round(x)}, Y=${Math.round(y)}`;
         });
 
         document.getElementById('btnRandom').addEventListener('click', () => {
-            const x = Math.random() * canvas.width;
+            impacts = []; // 清空之前的
+            const x = canvas.width * 0.2 + Math.random() * canvas.width * 0.6; // 偏中间生成
             const y = Math.random() * canvas.height;
-            cracksArray.push(generateCrackData(x, y));
-            if (!isDynamic) renderScene();
-            statusText.innerText = `随机生成裂纹 (X: ${Math.round(x)}, Y: ${Math.round(y)})`;
+            impacts.push(generatePhysicalShards(x, y));
+            if (!isDynamic) render();
+            statusText.innerText = `随机生成裂纹: X=${Math.round(x)}`;
         });
 
         document.getElementById('btnClear').addEventListener('click', () => {
-            cracksArray = [];
-            if (!isDynamic) renderScene();
-            statusText.innerText = '图层已清空';
+            impacts = [];
+            if (!isDynamic) render();
+            statusText.innerText = '画板已清空';
         });
 
         const btnStatic = document.getElementById('btnStatic');
         const btnDynamic = document.getElementById('btnDynamic');
 
-        function toggleMode(dynamic) {
+        function setMode(dynamic) {
             isDynamic = dynamic;
             if (dynamic) {
                 btnDynamic.classList.add('active');
                 btnStatic.classList.remove('active');
-                statusText.innerText = '动态模式启动 (持续渲染)';
-                renderScene();
+                statusText.innerText = '动态渲染开启 (性能消耗增加)';
+                render();
             } else {
                 btnStatic.classList.add('active');
                 btnDynamic.classList.remove('active');
                 cancelAnimationFrame(animationId);
-                statusText.innerText = '已切换为静态模式';
-                renderScene();
+                statusText.innerText = '切换至静态图层';
+                render(); // 渲染最后一帧
             }
         }
 
-        btnStatic.addEventListener('click', () => toggleMode(false));
-        btnDynamic.addEventListener('click', () => toggleMode(true));
+        btnStatic.addEventListener('click', () => setMode(false));
+        btnDynamic.addEventListener('click', () => setMode(true));
 
-        renderScene();
+        // 初始化渲染一次白板
+        render();
+
     </script>
 </body>
 </html>
