@@ -2,38 +2,33 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v3.0 - 物理信号解耦版</title>
+    <title>FRACTURE PRO v4.0 - Voronoi Logic</title>
     <style>
-        body, html { margin: 0; padding: 0; background-color: #000; color: #eee; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
-        .toolbar { background-color: #111; padding: 10px 20px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #333; z-index: 10; }
-        .control-group { display: flex; align-items: center; gap: 8px; background: #1a1a1a; padding: 5px 10px; border-radius: 4px; }
-        .control-group label { font-size: 10px; color: #888; text-transform: uppercase; }
+        body, html { margin: 0; padding: 0; background-color: #000; color: #eee; font-family: 'Courier New', monospace; overflow: hidden; }
+        .toolbar { background-color: #111; padding: 10px 20px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #333; }
+        .control-group { display: flex; align-items: center; gap: 8px; background: #1a1a1a; padding: 5px 10px; border-radius: 4px; border: 1px solid #222; }
+        .control-group label { font-size: 10px; color: #666; }
         .control-group span { font-size: 10px; color: #74ff06; width: 30px; text-align: right; }
         input[type="range"] { cursor: pointer; width: 60px; accent-color: #74ff06; }
-        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #000; padding: 20px; }
-        canvas { background-color: #74ff06; cursor: crosshair; image-rendering: pixelated; }
+        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; height: calc(100vh - 60px); }
+        canvas { background-color: #74ff06; cursor: crosshair; image-rendering: pixelated; box-shadow: 0 0 50px rgba(116, 255, 6, 0.1); }
     </style>
 </head>
 <body>
 
     <div class="toolbar">
-        <div style="font-weight:900; font-size:14px; color:#fff; border-right:1px solid #333; padding-right:15px">LCD_DAMAGED</div>
+        <div style="font-weight:900; font-size:14px; color:#fff;">VORONOI_FRACTURE</div>
         <div class="control-group">
-            <label>线宽</label>
-            <input type="range" id="ctrlLineWidth" min="1" max="12" value="2">
-            <span id="valLineWidth">2</span>
+            <label>碎片细度</label>
+            <input type="range" id="ctrlDensity" min="10" max="150" value="60">
+            <span id="valDensity">60</span>
         </div>
         <div class="control-group">
-            <label>故障密度</label>
-            <input type="range" id="ctrlDensity" min="1" max="100" value="70">
-            <span id="valDensity">70</span>
+            <label>故障强度</label>
+            <input type="range" id="ctrlIntensity" min="1" max="100" value="80">
+            <span id="valIntensity">80</span>
         </div>
-        <div class="control-group">
-            <label>信号抖动</label>
-            <input type="range" id="ctrlJitter" min="0" max="100" value="40">
-            <span id="valJitter">40</span>
-        </div>
-        <button id="btnClear" style="background:#333; border:1px solid #555; color:#fff; padding:5px 10px; cursor:pointer">重置画布</button>
+        <button id="btnClear" style="background:#222; border:1px solid #444; color:#fff; padding:5px 15px; cursor:pointer; font-size:10px;">RESET_SYSTEM</button>
     </div>
 
     <div class="workspace">
@@ -45,109 +40,117 @@
         const ctx = canvas.getContext('2d');
         
         let state = {
-            density: 0.7,
-            lineWidth: 2,
-            jitter: 0.4,
+            density: 60, // 种子点数量
+            intensity: 0.8,
             strikes: [] 
         };
 
-        document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
-        document.getElementById('ctrlLineWidth').oninput = e => { state.lineWidth = parseInt(e.target.value); document.getElementById('valLineWidth').innerText = e.target.value; };
-        document.getElementById('ctrlJitter').oninput = e => { state.jitter = e.target.value / 100; document.getElementById('valJitter').innerText = e.target.value; };
+        document.getElementById('ctrlDensity').oninput = e => { state.density = parseInt(e.target.value); document.getElementById('valDensity').innerText = e.target.value; };
+        document.getElementById('ctrlIntensity').oninput = e => { state.intensity = e.target.value / 100; document.getElementById('valIntensity').innerText = e.target.value; };
         document.getElementById('btnClear').onclick = () => state.strikes = [];
 
-        function generateStrike(originX, originY) {
-            const shards = [];
-            const rayCount = 14;
-            const rings = [0, 10, 25, 50, 120]; // 撞击点物理裂纹的半径，不再受比例扭曲
+        // 模拟 Voronoi 碎裂算法
+        function generateVoronoiShatter(originX, originY) {
+            const points = [];
+            const numPoints = state.density;
+            const radius = 150; // 影响范围
 
-            const angles = [];
-            for(let i=0; i<rayCount; i++) angles.push((Math.PI * 2 / rayCount) * i + (Math.random() * 0.4 - 0.2));
-            angles.sort();
+            // 1. 生成基于中心抖动的种子点
+            for(let i=0; i<numPoints; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                // 使用平方根分布让点更集中在中心
+                const dist = Math.sqrt(Math.random()) * radius; 
+                points.push({
+                    x: originX + Math.cos(angle) * dist * 0.8, // X 轴略微压缩
+                    y: originY + Math.sin(angle) * dist * 1.5, // Y 轴拉伸以填满 100px
+                    id: i
+                });
+            }
 
-            const vertices = [];
-            for (let r = 0; r < rings.length; r++) {
-                const ringVertices = [];
-                for (let a = 0; a < rayCount; a++) {
-                    const radius = rings[r] + (r > 0 ? (Math.random() * rings[r] * 0.3) : 0);
-                    // 核心修改：保持 X 和 Y 的比例为 1:1，保证圆心裂纹是圆的
-                    ringVertices.push({
-                        x: originX + Math.cos(angles[a]) * radius,
-                        y: originY + Math.sin(angles[a]) * radius
+            // 2. 简化的碎片多边形逻辑：基于网格的三角剖分模拟
+            // 这里我们为每个点生成一个小型的凸包碎片
+            const shards = points.map(p => {
+                const poly = [];
+                const sides = 5 + Math.floor(Math.random() * 3);
+                const pRadius = 5 + Math.random() * 20;
+                for(let j=0; j<sides; j++) {
+                    const a = (Math.PI * 2 / sides) * j + Math.random() * 0.5;
+                    poly.push({
+                        x: p.x + Math.cos(a) * pRadius,
+                        y: p.y + Math.sin(a) * pRadius
                     });
                 }
-                vertices.push(ringVertices);
-            }
+                
+                // 判定损坏类型
+                let type = 'none';
+                const dToCenter = Math.abs(p.x - originX);
+                if (dToCenter < 15) type = 'black'; // 核心黑屏区
+                else if (Math.random() < state.intensity) type = 'glitch'; // 故障信号区
 
-            for (let r = 0; r < rings.length - 1; r++) {
-                for (let a = 0; a < rayCount; a++) {
-                    const nextA = (a + 1) % rayCount;
-                    const poly = [vertices[r][a], vertices[r+1][a], vertices[r+1][nextA], vertices[r][nextA]];
-                    
-                    let type = 'none';
-                    if (r <= 1) type = 'black'; // 核心区域彻底损坏
-                    else if (Math.random() < 0.6) type = 'glitch'; // 外围区域产生信号故障
+                return { polygon: poly, type, center: p };
+            });
 
-                    shards.push({ polygon: poly, type: type });
-                }
-            }
             return { x: originX, y: originY, shards };
         }
 
-        function drawVerticalSignal(shard) {
-            let minX = Infinity, maxX = -Infinity;
+        function drawGlitchLines(shard) {
+            let minX = 2000, maxX = 0;
             shard.polygon.forEach(p => { if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x; });
-
-            const colors = ['#ff0055', '#0099ff', '#ff00ff', '#00ffff', '#ffffff', '#ffff00', '#000000'];
-            const w = state.lineWidth;
             
-            // 将故障线分布扩展到画板宽度
-            for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
-                if (Math.random() < state.density) {
+            const colors = ['#FF0000', '#0000FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
+            const stripeWidth = 2;
+            
+            for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += stripeWidth) {
+                if (Math.random() < 0.8) {
                     ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
-                    // Jitter 带来更细微的位移
-                    const xOffset = (Math.random() - 0.5) * (state.jitter * 30);
-                    ctx.fillRect(x + xOffset, 0, w, canvas.height); 
+                    ctx.fillRect(x, 0, stripeWidth, canvas.height); 
                 }
             }
         }
 
         function render() {
+            // 亮绿色背景
             ctx.fillStyle = '#74ff06';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             state.strikes.forEach(strike => {
+                // 1. 绘制故障信号 (在最底层)
                 strike.shards.forEach(shard => {
-                    if (shard.type === 'none') return;
-
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
-                    for(let i=1; i<shard.polygon.length; i++) ctx.lineTo(shard.polygon[i].x, shard.polygon[i].y);
-                    ctx.closePath();
-                    
-                    if (shard.type === 'black') {
+                    if (shard.type === 'glitch') {
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
+                        for(let i=1; i<shard.polygon.length; i++) ctx.lineTo(shard.polygon[i].x, shard.polygon[i].y);
+                        ctx.closePath();
                         ctx.clip();
+                        
                         ctx.fillStyle = '#000';
                         ctx.fill();
-                    } else if (shard.type === 'glitch') {
-                        // 条纹不再被碎片形状裁剪，而是以碎片位置为基准绘制纵向贯穿线
-                        // 但保留碎片形状的蒙版可以增加层次感
-                        ctx.clip(); 
-                        ctx.fillStyle = '#000';
-                        ctx.fill();
-                        drawVerticalSignal(shard);
+                        drawGlitchLines(shard);
+                        ctx.restore();
                     }
-                    ctx.restore();
                 });
 
-                // 物理裂纹线
+                // 2. 绘制核心黑屏区
+                strike.shards.forEach(shard => {
+                    if (shard.type === 'black') {
+                        ctx.beginPath();
+                        ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
+                        for(let i=1; i<shard.polygon.length; i++) ctx.lineTo(shard.polygon[i].x, shard.polygon[i].y);
+                        ctx.closePath();
+                        ctx.fillStyle = '#000';
+                        ctx.fill();
+                    }
+                });
+
+                // 3. 绘制物理裂纹线 (最顶层)
                 ctx.strokeStyle = 'rgba(255,255,255,0.4)';
                 ctx.lineWidth = 0.5;
                 strike.shards.forEach(shard => {
                     ctx.beginPath();
                     ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
                     for(let i=1; i<shard.polygon.length; i++) ctx.lineTo(shard.polygon[i].x, shard.polygon[i].y);
+                    ctx.closePath();
                     ctx.stroke();
                 });
             });
@@ -159,7 +162,7 @@
             const rect = canvas.getBoundingClientRect();
             const x = (e.clientX - rect.left) * (canvas.width / rect.width);
             const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-            state.strikes.push(generateStrike(x, y));
+            state.strikes.push(generateVoronoiShatter(x, y));
         });
 
         render();
