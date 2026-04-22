@@ -2,70 +2,70 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO - 深度故障版</title>
+    <title>FRACTURE PRO - 20:1 定制版</title>
     <style>
         body, html { 
-            margin: 0; padding: 0; background-color: #050505; color: #eee; 
+            margin: 0; padding: 0; background-color: #111; color: #eee; 
             font-family: 'Inter', system-ui, sans-serif; 
             height: 100vh; display: flex; flex-direction: column; overflow: hidden;
             user-select: none;
         }
         .toolbar { 
-            background-color: #111; padding: 12px 20px; display: flex; gap: 15px; 
-            align-items: center; border-bottom: 1px solid #333; z-index: 10; flex-wrap: wrap;
+            background-color: #222; padding: 10px 20px; display: flex; gap: 15px; 
+            align-items: center; border-bottom: 1px solid #000; z-index: 10;
         }
-        .branding { font-weight: 900; color: #fff; font-size: 14px; border-right: 1px solid #333; padding-right: 15px;}
+        .branding { font-weight: 900; color: #fff; font-size: 14px; margin-right: 10px; letter-spacing: 1px;}
         .control-group { 
             display: flex; align-items: center; gap: 8px; background: #1a1a1a; 
-            padding: 4px 10px; border-radius: 4px; border: 1px solid #222;
+            padding: 5px 10px; border-radius: 4px; border: 1px solid #333;
         }
-        .control-group label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px;}
-        .control-group span { font-size: 11px; color: #00ff00; width: 30px; text-align: right; font-family: monospace;}
-        input[type="range"] { cursor: pointer; width: 70px; accent-color: #00ff00; }
+        .control-group label { font-size: 11px; color: #888; text-transform: uppercase;}
+        .control-group span { font-size: 11px; color: #74ff06; width: 30px; text-align: right; font-family: monospace;}
+        input[type="range"] { cursor: pointer; width: 60px; accent-color: #74ff06; }
         button { 
-            background-color: #222; border: 1px solid #444; color: #fff; 
-            padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 11px; transition: 0.2s; 
+            background-color: #333; border: 1px solid #555; color: #fff; 
+            padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: bold;
         }
-        button:hover { background-color: #333; border-color: #00ff00; }
-        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; overflow: auto; padding: 20px; }
-        canvas { background-color: #000; cursor: crosshair; box-shadow: 0 0 100px rgba(0,255,0,0.05); }
-        .status-bar { background-color: #000; padding: 5px 20px; font-size: 10px; color: #555; display: flex; justify-content: space-between; border-top: 1px solid #111;}
+        button:hover { background-color: #444; border-color: #74ff06; }
+        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #050505; padding: 40px; overflow: auto;}
+        canvas { background-color: #74ff06; cursor: crosshair; }
+        .status-bar { background-color: #111; padding: 5px 20px; font-size: 10px; color: #555; display: flex; justify-content: space-between;}
     </style>
 </head>
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE ENGINE v2.0</div>
+        <div class="branding">FRACTURE PRO</div>
         
         <div class="control-group">
-            <label>故障线宽</label>
-            <input type="range" id="ctrlLineWidth" min="1" max="15" value="2">
-            <span id="valLineWidth">2</span>
+            <label>线宽</label>
+            <input type="range" id="ctrlLineWidth" min="1" max="10" value="1">
+            <span id="valLineWidth">1</span>
         </div>
 
         <div class="control-group">
             <label>故障密度</label>
-            <input type="range" id="ctrlDensity" min="1" max="100" value="85">
-            <span id="valDensity">85</span>
+            <input type="range" id="ctrlDensity" min="1" max="100" value="80">
+            <span id="valDensity">80</span>
         </div>
 
         <div class="control-group">
             <label>随机噪声</label>
-            <input type="range" id="ctrlJitter" min="0" max="100" value="40">
-            <span id="valJitter">40</span>
+            <input type="range" id="ctrlJitter" min="0" max="100" value="30">
+            <span id="valJitter">30</span>
         </div>
         
-        <button id="btnRandom">随机冲击</button>
-        <button id="btnClear" style="color:#ff4444">重置画布</button>
+        <button id="btnRandom">随机生成</button>
+        <button id="btnClear" style="color:#ff5555">重置</button>
     </div>
 
     <div class="workspace">
-        <canvas id="mainCanvas" width="2000" height="400"></canvas>
+        <canvas id="mainCanvas" width="2000" height="100"></canvas>
     </div>
 
     <div class="status-bar">
-        <span>MODE: LCD_PHYSICAL_DAMAGE_SIMULATION</span>
-        <span>IMPACT_POINTS: <span id="strikeCount" style="color:#00ff00">0</span></span>
+        <span>CANVAS: 2000 x 100 | BG: #74FF06</span>
+        <span>STRIKES: <span id="strikeCount" style="color:#74ff06">0</span></span>
     </div>
 
     <script>
@@ -74,9 +74,9 @@
         const strikeCountDisplay = document.getElementById('strikeCount');
         
         let state = {
-            density: 0.85,
-            lineWidth: 2,
-            jitter: 0.4,
+            density: 0.8,
+            lineWidth: 1,
+            jitter: 0.3,
             strikes: [] 
         };
 
@@ -96,17 +96,14 @@
 
         function generatePhysicalShards(originX, originY) {
             const shards = [];
-            // 锁定放射角度，减少水平偏移，增强“纵向切割”感
-            const rayCount = Math.floor(Math.random() * 8) + 12;
-            
-            // 环半径设计：快速覆盖纵向高度，水平跨度限制在画布 1/10
+            const rayCount = Math.floor(Math.random() * 6) + 12;
             const maxH = canvas.height;
-            const rings = [0, maxH*0.05, maxH*0.15, maxH*0.4, maxH*0.8, maxH*1.5];
+            // 让环半径迅速超出 100px 的高度
+            const rings = [0, maxH*0.1, maxH*0.3, maxH*0.6, maxH*1.2, maxH*2.0];
 
             const angles = [];
             for(let i=0; i<rayCount; i++) {
-                // 角度扰动减小，使裂纹更笔直
-                angles.push((Math.PI * 2 / rayCount) * i + (Math.random() * 0.2 - 0.1));
+                angles.push((Math.PI * 2 / rayCount) * i + (Math.random() * 0.3 - 0.15));
             }
             angles.sort();
 
@@ -115,9 +112,9 @@
                 const ringVertices = [];
                 for (let a = 0; a < rayCount; a++) {
                     const radius = rings[r];
-                    // 核心修改：将 X 轴压缩，Y 轴拉伸，形成 1:10 的破裂比例
-                    const stretchX = 0.4; 
-                    const stretchY = 1.2;
+                    // 1/10 比例控制：X轴极度压缩，Y轴拉伸
+                    const stretchX = 0.5; 
+                    const stretchY = 2.0;
                     ringVertices.push({
                         x: originX + Math.cos(angles[a]) * radius * stretchX,
                         y: originY + Math.sin(angles[a]) * radius * stretchY
@@ -134,13 +131,11 @@
                     let type = 'none';
                     const rand = Math.random();
                     
-                    // 修改：中心区域（r <= 1）现在也有概率产生故障线
-                    if (r === 0) {
-                        type = rand > 0.5 ? 'glitchLines' : 'black';
-                    } else if (r <= 2) {
-                        type = rand > 0.2 ? 'glitchLines' : 'black';
+                    // 增加中心故障概率
+                    if (r <= 2) {
+                        type = rand > 0.15 ? 'glitchLines' : 'black';
                     } else {
-                        type = rand > 0.4 ? 'glitchLines' : 'none';
+                        type = rand > 0.5 ? 'glitchLines' : 'none';
                     }
 
                     shards.push({ polygon: poly, type: type, ringIndex: r });
@@ -155,23 +150,23 @@
                 if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x;
             });
 
-            const colors = ['#FF0000', '#00FF00', '#0000FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00'];
+            // 参考图中鲜艳的色条
+            const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
             const w = state.lineWidth;
             
             for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
-                // 结合 Density 和 Jitter 控制分布
                 if (Math.random() < state.density) {
                     ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
-                    // Jitter 影响 X 轴偏移
-                    const xOffset = (Math.random() - 0.5) * (state.jitter * 50);
+                    // Jitter 控制条纹的错位
+                    const xOffset = (Math.random() - 0.5) * (state.jitter * 40);
                     ctx.fillRect(x + xOffset, 0, w, canvas.height); 
                 }
             }
         }
 
         function render() {
-            // 背景设为极深灰模拟黑屏，非纯绿
-            ctx.fillStyle = '#0a0a0a';
+            // 背景色还原为 #74ff06
+            ctx.fillStyle = '#74ff06';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             state.strikes.forEach(strike => {
@@ -189,23 +184,23 @@
                         ctx.fillStyle = '#000';
                         ctx.fill();
                     } else if (shard.type === 'glitchLines') {
-                        // 底色深黑
+                        // 故障区域默认铺个底，模拟LCD漏液感
                         ctx.fillStyle = '#000';
                         ctx.fill();
                         drawGlitchLines(shard);
                     }
                     
-                    // 中心高亮增强（参考图中的中心白光感）
+                    // 中心高亮
                     if (shard.ringIndex === 0) {
-                        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                        ctx.fillStyle = 'rgba(255,255,255,0.4)';
                         ctx.fill();
                     }
                     
                     ctx.restore();
                 });
 
-                // 绘制极细的白色裂纹线条
-                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                // 细裂纹线
+                ctx.strokeStyle = 'rgba(255,255,255,0.5)';
                 ctx.lineWidth = 0.5;
                 strike.shards.forEach(shard => {
                     ctx.beginPath();
@@ -240,7 +235,6 @@
             strikeCountDisplay.innerText = 0;
         };
 
-        // 初始化
         render();
     </script>
 </body>
