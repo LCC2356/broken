@@ -2,339 +2,246 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE_ENGINE_V4.0</title>
+    <title>FRACTURE PRO - 深度故障版</title>
     <style>
-        /* MICRO GRAPHICS DESIGN 风格 - 纯黑白、模块化、等宽字体 */
-        :root {
-            --bg: #000000;
-            --fg: #ffffff;
-            --border: #333333;
-            --highlight: #00ff00;
-            --font: 'Courier New', Courier, monospace;
+        body, html { 
+            margin: 0; padding: 0; background-color: #050505; color: #eee; 
+            font-family: 'Inter', system-ui, sans-serif; 
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+            user-select: none;
         }
-
-        body, html {
-            margin: 0; padding: 0;
-            background-color: var(--bg);
-            color: var(--fg);
-            font-family: var(--font);
-            font-size: 12px;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            text-transform: uppercase;
+        .toolbar { 
+            background-color: #111; padding: 12px 20px; display: flex; gap: 15px; 
+            align-items: center; border-bottom: 1px solid #333; z-index: 10; flex-wrap: wrap;
         }
-
-        /* 顶部导航与数据展示 */
-        .header {
-            display: grid;
-            grid-template-columns: 200px 1fr 200px;
-            border-bottom: 1px solid var(--border);
-            padding: 10px 20px;
-            align-items: center;
+        .branding { font-weight: 900; color: #fff; font-size: 14px; border-right: 1px solid #333; padding-right: 15px;}
+        .control-group { 
+            display: flex; align-items: center; gap: 8px; background: #1a1a1a; 
+            padding: 4px 10px; border-radius: 4px; border: 1px solid #222;
         }
-
-        .branding { font-weight: bold; letter-spacing: 2px; }
-        .live-data { text-align: center; color: #666; }
-
-        /* 模块化控制区 */
-        .controls-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            border-bottom: 1px solid var(--border);
-            background: #050505;
+        .control-group label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px;}
+        .control-group span { font-size: 11px; color: #00ff00; width: 30px; text-align: right; font-family: monospace;}
+        input[type="range"] { cursor: pointer; width: 70px; accent-color: #00ff00; }
+        button { 
+            background-color: #222; border: 1px solid #444; color: #fff; 
+            padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 11px; transition: 0.2s; 
         }
-
-        .control-box {
-            padding: 15px;
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .control-box:last-child { border-right: none; }
-        .control-box h4 { margin: 0 0 5px 0; color: #888; font-size: 10px; }
-
-        .input-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        input[type="number"], select {
-            background: #000;
-            border: 1px solid #444;
-            color: var(--highlight);
-            font-family: var(--font);
-            padding: 3px 5px;
-            width: 60px;
-            outline: none;
-        }
-
-        input[type="range"] {
-            flex: 1;
-            margin-left: 10px;
-            accent-color: var(--fg);
-        }
-
-        button {
-            background: transparent;
-            border: 1px solid var(--fg);
-            color: var(--fg);
-            font-family: var(--font);
-            padding: 8px;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        button:hover { background: var(--fg); color: var(--bg); }
-        button.danger { border-color: #ff3333; color: #ff3333; }
-        button.danger:hover { background: #ff3333; color: #fff; }
-
-        /* 画布工作区 */
-        .workspace {
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            background-image: radial-gradient(#111 1px, transparent 1px);
-            background-size: 20px 20px;
-        }
-
-        .canvas-frame {
-            border: 1px solid var(--fg);
-            box-shadow: 0 0 30px rgba(0,0,0,1);
-        }
-
-        canvas {
-            display: block;
-            background-color: #00ff00;
-            cursor: crosshair;
-        }
-
-        .footer {
-            padding: 5px 20px;
-            border-top: 1px solid var(--border);
-            font-size: 10px;
-            color: #555;
-            display: flex;
-            justify-content: space-between;
-        }
+        button:hover { background-color: #333; border-color: #00ff00; }
+        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; overflow: auto; padding: 20px; }
+        canvas { background-color: #000; cursor: crosshair; box-shadow: 0 0 100px rgba(0,255,0,0.05); }
+        .status-bar { background-color: #000; padding: 5px 20px; font-size: 10px; color: #555; display: flex; justify-content: space-between; border-top: 1px solid #111;}
     </style>
 </head>
 <body>
 
-<div class="header">
-    <div class="branding">FRACTURE_V4.0</div>
-    <div class="live-data" id="monitor">MONITOR: IDLE // STATUS: READY</div>
-    <div style="text-align: right;">EST. TIME: 0h:00m:00s</div>
-</div>
-
-<div class="controls-grid">
-    <div class="control-box">
-        <h4>物理形状 (SHAPE)</h4>
-        <select id="shape">
-            <option value="radial">RADIAL_CLASSIC</option>
-            <option value="shattered">SHATTERED_HARD</option>
-            <option value="web">WEB_DENSE</option>
-        </select>
-    </div>
-    <div class="control-box">
-        <h4>影响半径 (RADIUS)</h4>
-        <div class="input-row">
-            <label>PX</label>
-            <input type="number" id="radius" value="250" min="50" max="1000">
-        </div>
-    </div>
-    <div class="control-box">
-        <h4>故障线宽 (WIDTH)</h4>
-        <div class="input-row">
-            <label>PX</label>
-            <input type="number" id="lineWidth" value="1" min="1" max="20">
-        </div>
-    </div>
-    <div class="control-box">
-        <h4>聚集度 (CLUSTERING)</h4>
-        <div class="input-row">
-            <input type="range" id="clustering" min="0" max="1" step="0.1" value="0.7">
-        </div>
-    </div>
-    <div class="control-box">
-        <h4>操作 (ACTIONS)</h4>
-        <div style="display: flex; gap: 5px;">
-            <button id="btnRandom">随机砸击</button>
-            <button id="btnClear" class="danger">清空</button>
-        </div>
-    </div>
-</div>
-
-<div class="workspace">
-    <div class="canvas-frame">
-        <canvas id="cvs" width="2000" height="100"></canvas>
-    </div>
-</div>
-
-<div class="footer">
-    <span>SCALE: 20:1 // REFRESH: 24FPS</span>
-    <span id="strikeStats">STRIKES: 00</span>
-</div>
-
-<script>
-    const canvas = document.getElementById('cvs');
-    const ctx = canvas.getContext('2d');
-    const monitor = document.getElementById('monitor');
-    
-    let state = {
-        radius: 250,
-        lineWidth: 1,
-        clustering: 0.7,
-        shape: 'radial',
-        strikes: [],
-        animTimer: 0,
-        isGlitching: false
-    };
-
-    // 绑定数值输入
-    document.getElementById('radius').oninput = e => state.radius = parseInt(e.target.value);
-    document.getElementById('lineWidth').oninput = e => state.lineWidth = parseInt(e.target.value);
-    document.getElementById('clustering').oninput = e => state.clustering = parseFloat(e.target.value);
-    document.getElementById('shape').onchange = e => state.shape = e.target.value;
-
-    function generateFracture(x, y) {
-        const shards = [];
-        const rays = state.shape === 'web' ? 20 : 12;
-        const rings = state.shape === 'shattered' ? 4 : 7;
+    <div class="toolbar">
+        <div class="branding">FRACTURE ENGINE v2.0</div>
         
-        const angles = [];
-        for(let i=0; i<rays; i++) {
-            angles.push((Math.PI*2/rays)*i + (Math.random()*0.4-0.2));
-        }
-        angles.sort();
+        <div class="control-group">
+            <label>故障线宽</label>
+            <input type="range" id="ctrlLineWidth" min="1" max="15" value="2">
+            <span id="valLineWidth">2</span>
+        </div>
 
-        const rSteps = [];
-        for(let r=0; r<rings; r++) {
-            // 根据半径设置分布
-            rSteps.push((r/rings) * state.radius * (0.8 + Math.random()*0.4));
-        }
-        rSteps.push(state.radius * 2.5); // 最后一圈大碎片
+        <div class="control-group">
+            <label>故障密度</label>
+            <input type="range" id="ctrlDensity" min="1" max="100" value="85">
+            <span id="valDensity">85</span>
+        </div>
 
-        const vertices = [];
-        rSteps.forEach(r => {
-            const row = [];
-            angles.forEach(a => {
-                row.push({
-                    x: x + Math.cos(a)*r,
-                    y: y + Math.sin(a)*r
-                });
-            });
-            vertices.push(row);
-        });
+        <div class="control-group">
+            <label>随机噪声</label>
+            <input type="range" id="ctrlJitter" min="0" max="100" value="40">
+            <span id="valJitter">40</span>
+        </div>
+        
+        <button id="btnRandom">随机冲击</button>
+        <button id="btnClear" style="color:#ff4444">重置画布</button>
+    </div>
 
-        for(let r=0; r<vertices.length-1; r++) {
-            for(let a=0; a<rays; a++) {
-                const nA = (a + 1) % rays;
-                const poly = [vertices[r][a], vertices[r+1][a], vertices[r+1][nA], vertices[r][nA]];
-                
-                const rand = Math.random();
-                let type = 'none';
+    <div class="workspace">
+        <canvas id="mainCanvas" width="2000" height="400"></canvas>
+    </div>
 
-                // 核心区域（r<=1）
-                if (r <= 1) {
-                    // 中心随机故障线要求：核心区域不再全是黑色，随机出现故障
-                    type = rand < 0.3 ? 'glitchLines' : 'black'; 
-                } else if (r <= 4) {
-                    type = rand < 0.6 ? 'glitchLines' : 'none';
+    <div class="status-bar">
+        <span>MODE: LCD_PHYSICAL_DAMAGE_SIMULATION</span>
+        <span>IMPACT_POINTS: <span id="strikeCount" style="color:#00ff00">0</span></span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        const strikeCountDisplay = document.getElementById('strikeCount');
+        
+        let state = {
+            density: 0.85,
+            lineWidth: 2,
+            jitter: 0.4,
+            strikes: [] 
+        };
+
+        // UI 绑定
+        document.getElementById('ctrlDensity').oninput = e => {
+            state.density = e.target.value / 100;
+            document.getElementById('valDensity').innerText = e.target.value;
+        };
+        document.getElementById('ctrlLineWidth').oninput = e => {
+            state.lineWidth = parseInt(e.target.value);
+            document.getElementById('valLineWidth').innerText = e.target.value;
+        };
+        document.getElementById('ctrlJitter').oninput = e => {
+            state.jitter = e.target.value / 100;
+            document.getElementById('valJitter').innerText = e.target.value;
+        };
+
+        function generatePhysicalShards(originX, originY) {
+            const shards = [];
+            // 锁定放射角度，减少水平偏移，增强“纵向切割”感
+            const rayCount = Math.floor(Math.random() * 8) + 12;
+            
+            // 环半径设计：快速覆盖纵向高度，水平跨度限制在画布 1/10
+            const maxH = canvas.height;
+            const rings = [0, maxH*0.05, maxH*0.15, maxH*0.4, maxH*0.8, maxH*1.5];
+
+            const angles = [];
+            for(let i=0; i<rayCount; i++) {
+                // 角度扰动减小，使裂纹更笔直
+                angles.push((Math.PI * 2 / rayCount) * i + (Math.random() * 0.2 - 0.1));
+            }
+            angles.sort();
+
+            const vertices = [];
+            for (let r = 0; r < rings.length; r++) {
+                const ringVertices = [];
+                for (let a = 0; a < rayCount; a++) {
+                    const radius = rings[r];
+                    // 核心修改：将 X 轴压缩，Y 轴拉伸，形成 1:10 的破裂比例
+                    const stretchX = 0.4; 
+                    const stretchY = 1.2;
+                    ringVertices.push({
+                        x: originX + Math.cos(angles[a]) * radius * stretchX,
+                        y: originY + Math.sin(angles[a]) * radius * stretchY
+                    });
                 }
+                vertices.push(ringVertices);
+            }
 
-                shards.push({ poly, type });
+            for (let r = 0; r < rings.length - 1; r++) {
+                for (let a = 0; a < rayCount; a++) {
+                    const nextA = (a + 1) % rayCount;
+                    const poly = [vertices[r][a], vertices[r+1][a], vertices[r+1][nextA], vertices[r][nextA]];
+                    
+                    let type = 'none';
+                    const rand = Math.random();
+                    
+                    // 修改：中心区域（r <= 1）现在也有概率产生故障线
+                    if (r === 0) {
+                        type = rand > 0.5 ? 'glitchLines' : 'black';
+                    } else if (r <= 2) {
+                        type = rand > 0.2 ? 'glitchLines' : 'black';
+                    } else {
+                        type = rand > 0.4 ? 'glitchLines' : 'none';
+                    }
+
+                    shards.push({ polygon: poly, type: type, ringIndex: r });
+                }
+            }
+            return { x: originX, y: originY, shards };
+        }
+
+        function drawGlitchLines(shard) {
+            let minX = Infinity, maxX = -Infinity;
+            shard.polygon.forEach(p => {
+                if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x;
+            });
+
+            const colors = ['#FF0000', '#00FF00', '#0000FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00'];
+            const w = state.lineWidth;
+            
+            for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
+                // 结合 Density 和 Jitter 控制分布
+                if (Math.random() < state.density) {
+                    ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+                    // Jitter 影响 X 轴偏移
+                    const xOffset = (Math.random() - 0.5) * (state.jitter * 50);
+                    ctx.fillRect(x + xOffset, 0, w, canvas.height); 
+                }
             }
         }
-        return { x, y, shards };
-    }
 
-    function render() {
-        // 1. 绿幕背景
-        ctx.fillStyle = '#00ff00';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        function render() {
+            // 背景设为极深灰模拟黑屏，非纯绿
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        const colors = ['#ff0000', '#0000ff', '#ff00ff', '#00ffff', '#ffffff', '#ffff00'];
+            state.strikes.forEach(strike => {
+                strike.shards.forEach(shard => {
+                    if (shard.type === 'none') return;
 
-        state.strikes.forEach(s => {
-            s.shards.forEach(shard => {
-                ctx.save();
-                ctx.beginPath();
-                ctx.moveTo(shard.poly[0].x, shard.poly[0].y);
-                shard.poly.forEach(p => ctx.lineTo(p.x, p.y));
-                ctx.closePath();
-                ctx.clip();
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
+                    for(let i=1; i<shard.polygon.length; i++) ctx.lineTo(shard.polygon[i].x, shard.polygon[i].y);
+                    ctx.closePath();
+                    ctx.clip(); 
 
-                if (shard.type === 'black') {
-                    ctx.fillStyle = '#000';
-                    ctx.fill();
-                } else if (shard.type === 'glitchLines') {
-                    ctx.fillStyle = '#000'; ctx.fill();
-                    // 在碎片内画 1px 贯穿线
-                    for(let x=0; x<canvas.width; x+=state.lineWidth) {
-                        const cluster = Math.sin(x * 0.1) * state.clustering;
-                        if (Math.random() > 0.5 + cluster) {
-                            ctx.fillStyle = colors[Math.floor(Math.random()*colors.length)];
-                            ctx.fillRect(x, 0, state.lineWidth, canvas.height);
-                        }
+                    if (shard.type === 'black') {
+                        ctx.fillStyle = '#000';
+                        ctx.fill();
+                    } else if (shard.type === 'glitchLines') {
+                        // 底色深黑
+                        ctx.fillStyle = '#000';
+                        ctx.fill();
+                        drawGlitchLines(shard);
                     }
-                }
-                ctx.restore();
+                    
+                    // 中心高亮增强（参考图中的中心白光感）
+                    if (shard.ringIndex === 0) {
+                        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                        ctx.fill();
+                    }
+                    
+                    ctx.restore();
+                });
+
+                // 绘制极细的白色裂纹线条
+                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                ctx.lineWidth = 0.5;
+                strike.shards.forEach(shard => {
+                    ctx.beginPath();
+                    ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
+                    for(let i=1; i<shard.polygon.length; i++) ctx.lineTo(shard.polygon[i].x, shard.polygon[i].y);
+                    ctx.closePath();
+                    ctx.stroke();
+                });
             });
 
-            // 玻璃裂缝线
-            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-            ctx.lineWidth = 0.5;
-            s.shards.forEach(shard => {
-                ctx.beginPath();
-                ctx.moveTo(shard.poly[0].x, shard.poly[0].y);
-                shard.poly.forEach(p => ctx.lineTo(p.x, p.y));
-                ctx.stroke();
-            });
-        });
-    }
-
-    // 节奏控制
-    function loop() {
-        state.animTimer--;
-        if (state.animTimer <= 0) {
-            state.isGlitching = !state.isGlitching;
-            state.animTimer = state.isGlitching ? (2 + Math.random()*5) : (40 + Math.random()*60);
-            monitor.innerText = state.isGlitching ? "MONITOR: GLITCH_BURST // 010101" : "MONITOR: STABLE // SCANNING...";
+            requestAnimationFrame(render);
         }
 
-        if (state.isGlitching) render();
-        requestAnimationFrame(loop);
-    }
+        function addStrike(x, y) {
+            state.strikes.push(generatePhysicalShards(x, y));
+            strikeCountDisplay.innerText = state.strikes.length;
+        }
 
-    canvas.onmousedown = e => {
-        const rect = canvas.getBoundingClientRect();
-        const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-        const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-        state.strikes.push(generateFracture(x, y));
-        document.getElementById('strikeStats').innerText = "STRIKES: " + state.strikes.length.toString().padStart(2, '0');
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+            addStrike(x, y);
+        });
+
+        document.getElementById('btnRandom').onclick = () => {
+            addStrike(Math.random() * canvas.width, Math.random() * canvas.height);
+        };
+
+        document.getElementById('btnClear').onclick = () => {
+            state.strikes = [];
+            strikeCountDisplay.innerText = 0;
+        };
+
+        // 初始化
         render();
-    };
-
-    document.getElementById('btnRandom').onclick = () => {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        state.strikes.push(generateFracture(x, y));
-        render();
-    };
-
-    document.getElementById('btnClear').onclick = () => {
-        state.strikes = [];
-        render();
-    };
-
-    loop();
-</script>
+    </script>
 </body>
 </html>
