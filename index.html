@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO - 深度几何蜘蛛网定制版</title>
+    <title>FRACTURE PRO - 电子故障解耦版</title>
     <style>
         body, html { 
             margin: 0; padding: 0; background-color: #111; color: #eee; 
@@ -54,12 +54,6 @@
             <input type="range" id="ctrlJitter" min="0" max="100" value="40">
             <span id="valJitter">40</span>
         </div>
-
-        <div class="control-group">
-            <label>几何扭曲</label>
-            <input type="range" id="ctrlDistortion" min="0" max="100" value="50">
-            <span id="valDistortion">50</span>
-        </div>
         
         <button id="btnClear" style="color:#ff5555">RESET</button>
     </div>
@@ -69,7 +63,7 @@
     </div>
 
     <div class="status-bar">
-        <span>MODE: SHATTERED_WEB_WITH_DEPTH | CANVAS: 2000 x 100</span>
+        <span>MODE: ELECTRONIC_GLITCH_SIMULATION | CANVAS: 2000 x 100</span>
         <span>STRIKES: <span id="strikeCount" style="color:#74ff06">0</span> | BG: #74FF06</span>
     </div>
 
@@ -82,7 +76,6 @@
             density: 0.85,
             lineWidth: 2,
             jitter: 0.4,
-            distortion: 0.5,
             strikes: [] 
         };
 
@@ -99,10 +92,6 @@
             state.jitter = e.target.value / 100;
             document.getElementById('valJitter').innerText = e.target.value;
         };
-        document.getElementById('ctrlDistortion').oninput = e => {
-            state.distortion = e.target.value / 100;
-            document.getElementById('valDistortion').innerText = e.target.value;
-        };
         document.getElementById('btnClear').onclick = () => {
             state.strikes = [];
             strikeCountDisplay.innerText = 0;
@@ -111,9 +100,7 @@
         function generatePhysicalShards(originX, originY) {
             const shards = [];
             const rayCount = Math.floor(Math.random() * 6) + 16;
-            const maxH = canvas.height;
-            // 具有深度和贯穿能力的环
-            const rings = [0, 8, 25, 60, 150, 400, 800];
+            const rings = [0, 8, 25, 60, 150, 400]; // 具有深度的环
 
             const angles = [];
             for(let i=0; i<rayCount; i++) {
@@ -126,23 +113,10 @@
                 const ringVertices = [];
                 for (let a = 0; a < rayCount; a++) {
                     const radius = rings[r];
-                    // 几何扭曲实现：
-                    // 使用 distortion 值和 jitter 值来扭曲顶点。
-                    const angleJitter = (Math.random() - 0.5) * (state.jitter * 0.2); // 角度抖动
-                    const finalAngle = angles[a] + angleJitter;
-                    
-                    // X/Y 轴的偏心和扭曲：模拟 image_4.png 的形状
-                    // 我们使用一个特定的偏心拉伸因子，例如 y 轴拉伸，x 轴压缩
-                    const distortionFactorY = 1 + (state.distortion * 0.3); // 垂直拉伸
-                    const distortionFactorX = 1 - (state.distortion * 0.2); // 水平压缩
-                    
-                    // 为了增加深度和透视，我们将外部环设置得更远，且拉伸更强。
-                    const finalDistFactorY = distortionFactorY * (1 + (r / rings.length)); // 随深度增加
-                    const finalDistFactorX = distortionFactorX * (1 - (r / (rings.length * 2))); // 随深度减少，模拟透视
-                    
+                    // 核心修改：简化几何，不再应用扭曲拉伸
                     ringVertices.push({
-                        x: originX + Math.cos(finalAngle) * radius * finalDistFactorX,
-                        y: originY + Math.sin(finalAngle) * radius * finalDistFactorY
+                        x: originX + Math.cos(angles[a]) * radius,
+                        y: originY + Math.sin(angles[a]) * radius
                     });
                 }
                 vertices.push(ringVertices);
@@ -156,9 +130,9 @@
                     let type = 'none';
                     const rand = Math.random();
                     // 故障类型分配
-                    if (r <= 2) type = rand > 0.35 ? 'glitchLines' : 'black'; // 中心：主要是故障线条
+                    if (r <= 2) type = rand > 0.35 ? 'glitchLines' : 'black';
                     else if (r === 3) type = rand > 0.25 ? 'glitchLines' : 'black';
-                    else type = rand > 0.7 ? 'glitchLines' : 'none'; // 外部：偶尔故障线条
+                    else type = rand > 0.7 ? 'glitchLines' : 'none';
 
                     shards.push({ polygon: poly, type: type, ringIndex: r });
                 }
@@ -218,7 +192,8 @@
                     ctx.restore();
                 });
 
-                // 绘制细裂纹线条
+                // 💎 核心修改：已完全移除绘制圆环线条的代码块
+                /*
                 ctx.strokeStyle = 'rgba(255,255,255,0.4)';
                 ctx.lineWidth = 0.5;
                 strike.shards.forEach(shard => {
@@ -228,6 +203,7 @@
                     ctx.closePath();
                     ctx.stroke();
                 });
+                */
             });
 
             requestAnimationFrame(render);
