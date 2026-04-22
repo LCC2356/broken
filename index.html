@@ -2,365 +2,271 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>屏幕破碎实验室 - 细节优化版</title>
+    <title>屏幕破碎实验室 - 最终修正版</title>
     <style>
         body, html { 
-            margin: 0; padding: 0; background-color: #111; color: #eee; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; padding: 0; background-color: #1a1a1a; color: #eee; 
+            font-family: 'Segoe UI', system-ui, sans-serif; 
             height: 100vh; display: flex; flex-direction: column; overflow: hidden;
-            user-select: none;
         }
         
+        /* 顶部工具栏：Adobe 风格 */
         .toolbar { 
-            background-color: #222; padding: 15px 20px; display: flex; gap: 20px; 
-            align-items: center; border-bottom: 1px solid #000; box-shadow: 0 4px 15px rgba(0,0,0,0.8); 
-            z-index: 10; flex-wrap: wrap;
+            background-color: #2b2b2b; padding: 12px 20px; display: flex; gap: 15px; 
+            align-items: center; border-bottom: 1px solid #000; z-index: 100;
         }
         
-        .branding { font-weight: 900; color: #fff; letter-spacing: 1px; margin-right: 15px; font-size: 16px;}
+        .branding { font-weight: 900; font-size: 14px; color: #fff; margin-right: 15px; }
         
         .control-group { 
-            display: flex; align-items: center; gap: 10px; background: #1a1a1a; 
-            padding: 6px 12px; border-radius: 6px; border: 1px solid #333;
+            display: flex; align-items: center; gap: 8px; background: #222; 
+            padding: 5px 12px; border-radius: 4px; border: 1px solid #3d3d3d;
         }
-        .control-group label { font-size: 13px; color: #ccc; min-width: 60px;}
-        .control-group span { font-size: 12px; color: #00ff00; width: 30px; text-align: right;}
+        .control-group label { font-size: 12px; color: #aaa; }
         
-        input[type="range"] { cursor: pointer; }
-        
+        input[type="range"] { width: 80px; accent-color: #007acc; }
+
         button { 
-            background-color: #333; border: 1px solid #555; color: #fff; 
-            padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; transition: 0.2s; 
+            background: #444; border: 1px solid #555; color: #fff; padding: 6px 12px;
+            border-radius: 3px; cursor: pointer; font-size: 12px;
         }
-        button:hover { background-color: #444; border-color: #888;}
-        button:active { background-color: #222; }
-        button.danger { background-color: #520000; border-color: #ff0000; color: #ff9999; }
-        button.danger:hover { background-color: #7a0000; }
+        button:hover { background: #555; }
+        button.danger { color: #ff6b6b; border-color: #663333; }
         
+        /* 画布区域 */
         .workspace { 
             flex: 1; display: flex; justify-content: center; align-items: center; 
-            background-color: #0a0a0a; overflow: auto; padding: 40px;
+            background-color: #0f0f0f; padding: 20px;
         }
         
-        .canvas-container { box-shadow: 0 0 40px rgba(0, 255, 0, 0.1); border: 2px solid #333; }
-        canvas { display: block; background-color: #00ff00; cursor: crosshair; }
+        .canvas-shadow { box-shadow: 0 0 50px rgba(0,0,0,0.9); border: 1px solid #333; }
         
-        .status-bar { 
-            background-color: #111; padding: 6px 20px; font-size: 12px; color: #888; 
-            border-top: 1px solid #222; display: flex; justify-content: space-between;
+        canvas { 
+            background-color: #00ff00; /* 纯绿背景 */
+            display: block; cursor: crosshair; 
         }
-        .status-highlight { color: #00ff00; font-weight: bold; }
-        .toggle-btn { padding: 8px 16px; background: #222; border: 1px solid #444; color: #888; border-radius: 4px;}
-        .toggle-btn.active { background: #0055ff; color: #fff; border-color: #0077ff;}
+
+        .status { padding: 4px 20px; background: #222; font-size: 11px; color: #666; border-top: 1px solid #000; }
     </style>
 </head>
 <body>
 
-    <div class="toolbar">
-        <div class="branding">FRACTURE ENGINE</div>
-
-        <button id="btnToggleAnim" class="toggle-btn active">动态节律闪烁：开</button>
-        
-        <div class="control-group">
-            <label>故障强度</label>
-            <input type="range" id="ctrlIntensity" min="0" max="1" step="0.05" value="0.9" style="width: 100px;">
-        </div>
-
-        <div class="control-group">
-            <label>条纹密度</label>
-            <input type="range" id="ctrlDensity" min="1" max="100" step="1" value="80" style="width: 100px;">
-        </div>
-
-        <div class="control-group">
-            <label>条纹聚集度</label>
-            <input type="range" id="ctrlClustering" min="0" max="1" step="0.05" value="0.8" style="width: 100px;" title="控制条纹是均匀散布还是结成色带簇">
-        </div>
-        
-        <button id="btnRandom">随机砸击</button>
-        <button id="btnClear" class="danger">清空画板</button>
+<div class="toolbar">
+    <div class="branding">FRACTURE FX PRO</div>
+    
+    <div class="control-group">
+        <label>强度</label>
+        <input type="range" id="itst" min="0" max="1" step="0.1" value="0.9">
     </div>
 
-    <div class="workspace">
-        <div class="canvas-container">
-            <canvas id="mainCanvas" width="2000" height="100"></canvas>
-        </div>
+    <div class="control-group">
+        <label>密度</label>
+        <input type="range" id="dens" min="1" max="100" value="60">
     </div>
 
-    <div class="status-bar">
-        <span id="statusText">系统就绪。点击画板生成 10% 宽度的破碎区...</span>
-        <span>破裂点数：<span id="strikeCount" class="status-highlight">0</span></span>
+    <div class="control-group">
+        <label>聚集度</label>
+        <input type="range" id="clus" min="0" max="1" step="0.1" value="0.7">
     </div>
 
-    <script>
-        const canvas = document.getElementById('mainCanvas');
-        const ctx = canvas.getContext('2d');
-        const statusText = document.getElementById('statusText');
-        const strikeCountDisplay = document.getElementById('strikeCount');
-        
-        // --- 核心状态 ---
-        let state = {
-            intensity: 0.9,
-            density: 80,
-            clustering: 0.8,
-            isDynamic: true,
-            strikes: []
-        };
+    <div class="control-group">
+        <label>黑斑半径</label>
+        <input type="range" id="lrad" min="10" max="150" value="45">
+    </div>
 
-        // --- 动画节律控制器 ---
-        let animPhase = 'PAUSED'; // 'PAUSED' (停顿) 或 'GLITCHING' (狂闪)
-        let phaseTimer = 0;
+    <button id="btnRandom">随机砸击</button>
+    <button id="btnClear" class="danger">清空画板</button>
+</div>
 
-        // 绑定控件
-        document.getElementById('ctrlIntensity').addEventListener('input', e => state.intensity = parseFloat(e.target.value));
-        document.getElementById('ctrlDensity').addEventListener('input', e => state.density = parseInt(e.target.value));
-        document.getElementById('ctrlClustering').addEventListener('input', e => state.clustering = parseFloat(e.target.value));
-        
-        const btnToggleAnim = document.getElementById('btnToggleAnim');
-        btnToggleAnim.addEventListener('click', () => {
-            state.isDynamic = !state.isDynamic;
-            if (state.isDynamic) {
-                btnToggleAnim.classList.add('active');
-                btnToggleAnim.innerText = '动态节律闪烁：开';
-                animationTick(); // 重启循环
-            } else {
-                btnToggleAnim.classList.remove('active');
-                btnToggleAnim.innerText = '动态节律闪烁：关';
-                render(); // 渲染一次静态帧
-            }
-        });
+<div class="workspace">
+    <div class="canvas-shadow">
+        <canvas id="cvs" width="2000" height="100"></canvas>
+    </div>
+</div>
 
-        // ----------------------------------------------------
-        // 几何生成引擎：收缩破裂范围 & 独立分配损坏属性
-        // ----------------------------------------------------
-        function generatePhysicalShards(originX, originY) {
-            const shards = [];
-            const rayCount = Math.floor(Math.random() * 6) + 8; 
-            const angles = [];
-            for(let i=0; i<rayCount; i++) {
-                angles.push((Math.PI * 2 / rayCount) * i + (Math.random() * 0.5 - 0.25));
-            }
-            angles.sort();
+<div class="status">
+    状态: <span id="msg" style="color:#00ff00">就绪</span> | 比例: 20:1 | 画布尺寸: 2000x100
+</div>
 
-            // 爆炸环半径控制在 200~280px 左右 (约画板 1/10 ~ 1/7)
-            const rings = [0, 10, 25, 55, 100, 180, 260]; 
-            
-            const vertices = [];
-            for (let r = 0; r < rings.length; r++) {
-                const ringVertices = [];
-                for (let a = 0; a < rayCount; a++) {
-                    const radius = rings[r] + (r > 0 ? (Math.random() * rings[r] * 0.4) : 0); 
-                    const angle = angles[a];
-                    ringVertices.push({
-                        x: originX + Math.cos(angle) * radius,
-                        y: originY + Math.sin(angle) * radius
-                    });
-                }
-                vertices.push(ringVertices);
-            }
+<script>
+    const canvas = document.getElementById('cvs');
+    const ctx = canvas.getContext('2d');
+    const msg = document.getElementById('msg');
+    
+    let state = {
+        intensity: 0.9,
+        density: 60,
+        clustering: 0.7,
+        leakRadius: 45,
+        strikes: [],
+        animPhase: 'IDLE', // IDLE, GLITCHING
+        phaseTimer: 0
+    };
 
-            for (let r = 0; r < rings.length - 1; r++) {
-                for (let a = 0; a < rayCount; a++) {
-                    const nextA = (a + 1) % rayCount;
-                    const p1 = vertices[r][a];
-                    const p2 = vertices[r+1][a];
-                    const p3 = vertices[r+1][nextA];
-                    const p4 = vertices[r][nextA];
+    // 监听控件
+    document.getElementById('itst').oninput = e => state.intensity = parseFloat(e.target.value);
+    document.getElementById('dens').oninput = e => state.density = parseInt(e.target.value);
+    document.getElementById('clus').oninput = e => state.clustering = parseFloat(e.target.value);
+    document.getElementById('lrad').oninput = e => state.leakRadius = parseInt(e.target.value);
 
-                    const rand = Math.random();
-                    
-                    // 属性变为并行独立判断：一个碎片可以既是黑色漏液，又有故障线
-                    const isBlack = r <= 1 || (r === 2 && rand > 0.4); 
-                    const hasLines = rand > 0.2; // 80%的区域都会附带线条，包括黑区
-                    const hasBlocks = r <= 4 && rand > 0.8;
+    // 生成物理破裂数据
+    function createFracture(x, y) {
+        const shards = [];
+        const rays = 12;
+        const radiusLimit = 200 + Math.random() * 80; // 影响范围 200-280px
 
-                    shards.push({
-                        polygon: [p1, p2, p3, p4],
-                        isBlack, hasLines, hasBlocks
-                    });
-                }
-            }
-            return { x: originX, y: originY, shards: shards };
-        }
-
-        // ----------------------------------------------------
-        // 渲染管线
-        // ----------------------------------------------------
-        function getBoundingBox(polygon) {
-            let minX = Infinity, maxX = -Infinity;
-            polygon.forEach(p => { if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x; });
-            return {minX, maxX};
-        }
-
-        // 绘制 1px 贯穿排线 (带聚集度 Clustering 算法)
-        function drawGlitchLines(shard) {
-            const bbox = getBoundingBox(shard.polygon);
-            const colors = ['#FF0000', '#00FF00', '#0000FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00'];
-            
-            let inCluster = false;
-            let clusterCountdown = 0;
-
-            for (let x = Math.floor(bbox.minX); x <= Math.ceil(bbox.maxX); x++) {
-                
-                // 聚集度算法：控制是画成一条条的色带簇，还是满屏飞扬的噪点
-                if (state.clustering > 0.1) {
-                    if (clusterCountdown <= 0) {
-                        if (Math.random() > state.clustering) {
-                            inCluster = true; // 开启一阵密集的色带簇
-                            clusterCountdown = Math.random() * 25 + 5; // 簇的宽度 (5-30px)
-                        } else {
-                            inCluster = false; // 陷入空白无码区
-                            clusterCountdown = Math.random() * 40 * state.clustering + 5; 
-                        }
-                    }
-                    clusterCountdown--;
-                    if (!inCluster) continue; // 如果不在簇内，直接跳过当前 X 像素
-                }
-
-                // 在允许绘制的区域内，根据密度画线
-                if (Math.random() < (state.density / 100) * state.intensity) {
-                    ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
-                    ctx.fillRect(x, 0, 1, canvas.height); // 强制占满 Y 轴
-                }
-            }
-        }
-
-        function drawGlitchBlocks(shard) {
-            const bbox = getBoundingBox(shard.polygon);
-            const colors = ['#FF0055', '#00FFAA', '#0055FF', '#111111'];
-            for (let i = 0; i < 4 * state.intensity; i++) {
-                ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
-                const width = Math.random() * 80 + 10;
-                const height = Math.random() * 4 + 1;
-                const x = bbox.minX + Math.random() * (bbox.maxX - bbox.minX);
-                const y = Math.random() * canvas.height;
-                ctx.fillRect(x, y, width, height);
-            }
-        }
-
-        function render() {
-            // 背景绝对锁定为纯绿
-            ctx.fillStyle = '#00ff00';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            const allBlackShards = [];
-            const allLineShards = [];
-            const allBlockShards = [];
-
-            state.strikes.forEach(strike => {
-                strike.shards.forEach(shard => {
-                    if (shard.isBlack) allBlackShards.push(shard);
-                    if (shard.hasLines) allLineShards.push(shard);
-                    if (shard.hasBlocks) allBlockShards.push(shard);
-                });
+        // 漏液区域由一组随机圆组成，形成自然融合感
+        const leaks = [];
+        for(let i=0; i<6; i++) {
+            leaks.push({
+                ox: (Math.random()-0.5)*40,
+                oy: (Math.random()-0.5)*20,
+                r: state.leakRadius * (0.6 + Math.random()*0.5)
             });
+        }
 
-            const applyClipAndDraw = (shards, drawFunc, fillBlackFirst = false) => {
-                shards.forEach(shard => {
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
-                    for(let i=1; i<shard.polygon.length; i++) {
-                        ctx.lineTo(shard.polygon[i].x, shard.polygon[i].y);
-                    }
-                    ctx.closePath();
-                    ctx.clip(); 
+        // 碎片多边形生成
+        for(let i=0; i<rays; i++) {
+            const a1 = (i / rays) * Math.PI * 2;
+            const a2 = ((i+1) / rays) * Math.PI * 2;
+            const r1 = radiusLimit * (0.8 + Math.random()*0.4);
+            
+            shards.push({
+                points: [
+                    {x: x, y: y},
+                    {x: x + Math.cos(a1)*r1, y: y + Math.sin(a1)*r1},
+                    {x: x + Math.cos(a2)*r1, y: y + Math.sin(a2)*r1}
+                ],
+                hasLines: Math.random() < 0.8
+            });
+        }
 
-                    if (fillBlackFirst) {
-                        ctx.fillStyle = '#000000'; // 纯黑底，解决灰色问题
-                        ctx.fill();
-                    }
-                    if(drawFunc) drawFunc(shard);
-                    ctx.restore();
-                });
-            };
+        return { x, y, shards, leaks };
+    }
 
-            // 1. 最底层：所有纯黑漏液区
-            applyClipAndDraw(allBlackShards, null, true);
+    // 核心绘制逻辑
+    function draw() {
+        // 1. 基础绿背
+        ctx.fillStyle = '#00ff00';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 2. 中间层：覆盖排线故障 (会在黑底和绿底上同时穿透)
-            applyClipAndDraw(allLineShards, drawGlitchLines, false);
+        if (state.strikes.length === 0) return;
 
-            // 3. 错位色块层
-            applyClipAndDraw(allBlockShards, drawGlitchBlocks, false);
-
-            // 4. 最顶层：物理玻璃裂纹
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-            ctx.lineWidth = 0.5;
-            state.strikes.forEach(strike => {
-                strike.shards.forEach(shard => {
-                    ctx.beginPath();
-                    ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
-                    for(let i=1; i<shard.polygon.length; i++) {
-                        ctx.lineTo(shard.polygon[i].x, shard.polygon[i].y);
-                    }
-                    ctx.stroke();
-                });
-                ctx.fillStyle = '#fff';
+        // 2. 绘制漏液黑斑层 (合并所有点击的黑斑)
+        ctx.fillStyle = '#000000';
+        state.strikes.forEach(s => {
+            s.leaks.forEach(l => {
                 ctx.beginPath();
-                ctx.arc(strike.x, strike.y, 1.5, 0, Math.PI*2);
+                ctx.arc(s.x + l.ox, s.y + l.oy, l.r, 0, Math.PI*2);
                 ctx.fill();
             });
-        }
+        });
 
-        // --- 节律控制动画循环 ---
-        function animationTick() {
-            if (!state.isDynamic) return;
+        // 3. 绘制故障线与碎片
+        state.strikes.forEach(s => {
+            s.shards.forEach(shard => {
+                ctx.save();
+                // 裁剪出碎片区域
+                ctx.beginPath();
+                ctx.moveTo(shard.points[0].x, shard.points[0].y);
+                ctx.lineTo(shard.points[1].x, shard.points[1].y);
+                ctx.lineTo(shard.points[2].x, shard.points[2].y);
+                ctx.closePath();
+                ctx.clip();
 
-            if (animPhase === 'PAUSED') {
-                phaseTimer--;
-                if (phaseTimer <= 0) {
-                    animPhase = 'GLITCHING';
-                    // 启动狂闪阶段：连续渲染 2 到 5 帧
-                    phaseTimer = Math.floor(Math.random() * 4) + 2; 
+                // 如果处于闪烁阶段，则重新绘制线条
+                if (state.animPhase === 'GLITCHING' && shard.hasLines) {
+                    drawClusteredLines(shard);
+                } else if (state.animPhase === 'IDLE' && shard.hasLines) {
+                    // 静态时也需要保留基础纹理
+                    drawClusteredLines(shard, true); 
                 }
-                // 在 PAUSED 阶段，不调用 render()，画面保持静止，只做倒计时
-                setTimeout(animationTick, 40);
-            } else {
-                // GLITCHING 阶段：每次都渲染出新的随机线条
-                render(); 
-                phaseTimer--;
-                if (phaseTimer <= 0) {
-                    animPhase = 'PAUSED';
-                    // 陷入停顿：随机停顿 20 到 60 帧 (约 0.8秒 到 2.4秒)
-                    phaseTimer = Math.floor(Math.random() * 40) + 20; 
-                }
-                // 狂闪的间隔极其短促
-                setTimeout(animationTick, 40 + Math.random() * 30);
+                ctx.restore();
+            });
+
+            // 4. 绘制裂纹线条 (细白线)
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = 0.5;
+            s.shards.forEach(shard => {
+                ctx.beginPath();
+                ctx.moveTo(shard.points[0].x, shard.points[0].y);
+                ctx.lineTo(shard.points[1].x, shard.points[1].y);
+                ctx.lineTo(shard.points[2].x, shard.points[2].y);
+                ctx.stroke();
+            });
+        });
+    }
+
+    function drawClusteredLines(shard, isStatic = false) {
+        // 伪随机种子，保证静态时线条不乱跳
+        const seed = isStatic ? shard.points[1].x : Math.random();
+        const colors = ['#ff0000', '#0000ff', '#ff00ff', '#00ffff', '#ffffff', '#ffff00'];
+        
+        let xMin = Math.min(...shard.points.map(p => p.x));
+        let xMax = Math.max(...shard.points.map(p => p.x));
+
+        for (let x = Math.floor(xMin); x < xMax; x++) {
+            // 聚集度算法：控制线条成簇
+            const noise = Math.sin(x * 0.5) * Math.cos(x * 0.2);
+            const threshold = 1.0 - (state.density / 100);
+            
+            if (Math.random() > threshold + (noise * state.clustering)) {
+                ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+                ctx.fillRect(x, 0, 1, canvas.height); // 1px 贯穿
             }
         }
+    }
 
-        // --- 交互 ---
-        function addStrike(x, y) {
-            state.strikes.push(generatePhysicalShards(x, y));
-            strikeCountDisplay.innerText = state.strikes.length;
-            render(); // 立即渲染一帧反馈
+    // 动画节奏控制器
+    function loop() {
+        if (state.phaseTimer <= 0) {
+            if (state.animPhase === 'IDLE') {
+                state.animPhase = 'GLITCHING';
+                state.phaseTimer = 3 + Math.random() * 5; // 爆发闪烁 3-8 帧
+            } else {
+                state.animPhase = 'IDLE';
+                state.phaseTimer = 60 + Math.random() * 100; // 停顿 1-2 秒
+            }
         }
-
-        canvas.addEventListener('mousedown', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            const x = (e.clientX - rect.left) * scaleX;
-            const y = (e.clientY - rect.top) * scaleY;
-            addStrike(x, y);
-        });
-
-        document.getElementById('btnRandom').addEventListener('click', () => {
-            addStrike(Math.random() * canvas.width, Math.random() * canvas.height);
-        });
-
-        document.getElementById('btnClear').addEventListener('click', () => {
-            state.strikes = [];
-            strikeCountDisplay.innerText = 0;
-            render();
-        });
-
-        // 初始首次撞击 
-        addStrike(canvas.width * 0.75, canvas.height * 0.2);
         
-        // 启动节律循环
-        animationTick();
+        state.phaseTimer--;
+        
+        if (state.animPhase === 'GLITCHING') {
+            draw();
+        } else if (state.phaseTimer === 59) {
+            // 刚进入 IDLE 时重绘一次静态帧
+            draw();
+        }
+        
+        requestAnimationFrame(loop);
+    }
 
-    </script>
+    // 交互
+    canvas.onmousedown = e => {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+        state.strikes.push(createFracture(x, y));
+        msg.innerText = `击中位置: ${Math.floor(x)}px`;
+        draw();
+    };
+
+    document.getElementById('btnRandom').onclick = () => {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        state.strikes.push(createFracture(x, y));
+        draw();
+    };
+
+    document.getElementById('btnClear').onclick = () => {
+        state.strikes = [];
+        draw();
+    };
+
+    // 启动
+    draw();
+    loop();
+</script>
+
 </body>
 </html>
