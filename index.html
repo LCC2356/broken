@@ -32,13 +32,13 @@
         <div class="branding">FRACTURE_v8.1</div>
         <div class="control-group">
             <label>线宽</label>
-            <input type="range" id="ctrlLineWidth" min="0" max="15" value="2">
-            <span id="valLineWidth">2</span>
+            <input type="range" id="ctrlLineWidth" min="0" max="15" value="1">
+            <span id="valLineWidth">1</span>
         </div>
         <div class="control-group">
             <label>密度</label>
-            <input type="range" id="ctrlDensity" min="1" max="100" value="75">
-            <span id="valDensity">75</span>
+            <input type="range" id="ctrlDensity" min="1" max="100" value="15">
+            <span id="valDensity">15</span>
         </div>
         <div class="switch-group">
             <label>原位闪烁</label>
@@ -59,8 +59,9 @@
         const ctx = canvas.getContext('2d');
         
         let state = {
-            density: 0.75,
-            lineWidth: 2,
+            // 1. 同步初始状态
+            density: 0.15, 
+            lineWidth: 1,
             isDynamic: true,
             impactWidth: 160,
             screenGlitch: 0, 
@@ -128,22 +129,50 @@
                 ctx.fillStyle = grad; ctx.fill();
             }
 
+            // 2. 修改：增加横向故障线可能性
             drawGlitchLines() {
                 let minX = 2000, maxX = 0;
-                this.points.forEach(p => { if(p[0] < minX) minX = p[0]; if(p[0] > maxX) maxX = p[0]; });
+                let minY = 2000, maxY = 0;
+                this.points.forEach(p => { 
+                    if(p[0] < minX) minX = p[0]; if(p[0] > maxX) maxX = p[0]; 
+                    if(p[1] < minY) minY = p[1]; if(p[1] > maxY) maxY = p[1];
+                });
+                
                 const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
                 const w = Math.max(1, state.lineWidth);
-                for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
-                    const noise = this.absRandom(x, this.seed);
-                    if (noise < state.density) {
-                        if (state.isDynamic) {
-                            const flicker = Math.random();
-                            if (flicker < 0.1) continue;
-                            if (flicker < 0.3) ctx.globalAlpha = 0.4;
+                
+                // 判定方向：80% 竖向, 20% 横向
+                const isHorizontal = this.absRandom(this.seed, 99.9) < 0.2;
+
+                if (!isHorizontal) {
+                    // 竖线逻辑
+                    for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
+                        const noise = this.absRandom(x, this.seed);
+                        if (noise < state.density) {
+                            if (state.isDynamic) {
+                                const flicker = Math.random();
+                                if (flicker < 0.1) continue;
+                                if (flicker < 0.3) ctx.globalAlpha = 0.4;
+                            }
+                            ctx.fillStyle = colors[Math.floor(noise * colors.length * 13) % colors.length];
+                            ctx.fillRect(x, 0, w, canvas.height); 
+                            ctx.globalAlpha = 1.0;
                         }
-                        ctx.fillStyle = colors[Math.floor(noise * colors.length * 13) % colors.length];
-                        ctx.fillRect(x, 0, w, canvas.height); 
-                        ctx.globalAlpha = 1.0;
+                    }
+                } else {
+                    // 横线逻辑
+                    for (let y = Math.floor(minY); y <= Math.ceil(maxY); y += w) {
+                        const noise = this.absRandom(y, this.seed + 500); 
+                        if (noise < state.density) {
+                            if (state.isDynamic) {
+                                const flicker = Math.random();
+                                if (flicker < 0.1) continue;
+                                if (flicker < 0.3) ctx.globalAlpha = 0.4;
+                            }
+                            ctx.fillStyle = colors[Math.floor(noise * colors.length * 13) % colors.length];
+                            ctx.fillRect(0, y, canvas.width, w); 
+                            ctx.globalAlpha = 1.0;
+                        }
                     }
                 }
             }
@@ -200,23 +229,18 @@
 
         canvas.addEventListener('mousedown', (e) => {
             if (e.button === 2) return;
-
             state.screenGlitch = 8; 
-
             const rect = canvas.getBoundingClientRect();
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const my = (e.clientY - rect.top) * (canvas.height / rect.height);
-
             const angL = (Math.random() - 0.5) * 30; 
             const angR = (Math.random() - 0.5) * 30;
             const xL = mx - (40 + Math.random() * 40);
             const xR = mx + (40 + Math.random() * 40);
             const pathL = generatePolyline(xL, my, angL);
             const pathR = generatePolyline(xR, my, angR);
-
             let nextPolygons = [];
             const impactSeed = Math.random();
-
             state.polygons.forEach(target => {
                 let minX = 2000, maxX = 0;
                 target.points.forEach(p => { if(p[0]<minX) minX=p[0]; if(p[0]>maxX) maxX=p[0]; });
@@ -224,7 +248,6 @@
                     nextPolygons.push(target);
                     return;
                 }
-
                 let [pLeft, pRest] = sliceByPolyline(target.points, pathL);
                 if (pRest.length > 2) {
                     let [pMid, pRight] = sliceByPolyline(pRest, pathR);
@@ -238,7 +261,6 @@
                     if (pLeft.length > 2) nextPolygons.push(new Polygon(pLeft, target.type, target.seed));
                 }
             });
-
             state.polygons = nextPolygons.filter(p => p.getArea() > 0.5).slice(0, 1000);
         });
 
@@ -248,13 +270,7 @@
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const h = canvas.height;
             const half = h / 2;
-
-            const squarePoints = [
-                [mx - half, 0],       
-                [mx + half, 0],       
-                [mx + half, h],       
-                [mx - half, h]        
-            ];
+            const squarePoints = [[mx - half, 0], [mx + half, 0], [mx + half, h], [mx - half, h]];
             state.polygons.push(new Polygon(squarePoints, 'pink', null));
         });
 
@@ -264,11 +280,9 @@
                 const p1 = points[i], p2 = points[(i + 1) % points.length];
                 const r = 0.3 + Math.random() * 0.4;
                 const mid = [p1[0] + (p2[0]-p1[0])*r, p1[1] + (p2[1]-p1[1])*r];
-
                 const type1 = Math.random() < 0.7 ? 'glitch' : 'black';
                 const type2 = Math.random() < 0.4 ? 'glitch' : 'black';
                 const getSeed = (s) => Math.random() < 0.5 ? impactSeed : Math.random();
-                
                 res.push(new Polygon([p1, mid, [mx, my]], type1, getSeed()));
                 res.push(new Polygon([mid, p2, [mx, my]], type2, getSeed()));
             }
@@ -278,18 +292,12 @@
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save(); 
-
-            // 1. 坐标偏移（相机震动）
             if (state.screenGlitch > 0) {
                 state.screenGlitch--;
                 const shake = state.screenGlitch * 1.5; 
                 ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
             }
-
-            // 正常绘制所有多边形
             state.polygons.forEach(p => p.draw());
-
-            // 2. 高性能色彩重置 
             if (state.screenGlitch > 0) {
                 if (Math.random() > 0.5) {
                     ctx.globalCompositeOperation = 'difference';
@@ -301,22 +309,13 @@
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
             }
-
             ctx.restore(); 
-
-            // 3. 画面横向物理撕裂
             if (state.screenGlitch > 0 && Math.random() > 0.3) {
                 const sliceY = Math.random() * canvas.height;
                 const sliceH = Math.random() * 8 + 2; 
                 const offset = (Math.random() - 0.5) * 40;
-                
-                ctx.drawImage(
-                    canvas, 
-                    0, sliceY, canvas.width, sliceH, 
-                    offset, sliceY, canvas.width, sliceH 
-                );
+                ctx.drawImage(canvas, 0, sliceY, canvas.width, sliceH, offset, sliceY, canvas.width, sliceH);
             }
-
             requestAnimationFrame(render);
         }
 
