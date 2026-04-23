@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v8.6 - 极致物理碎痕版</title>
+    <title>FRACTURE PRO v8.7 - 纯粹物理折线版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -29,7 +29,7 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v8.6</div>
+        <div class="branding">FRACTURE_v8.7</div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="1" max="150" value="5">
@@ -42,7 +42,7 @@
         </div>
         
         <div class="control-group" style="border-color: #0044FF;">
-            <label>横线比例%</label>
+            <label>横向概率%</label>
             <input type="range" id="ctrlHorizProb" min="0" max="100" value="10">
             <span id="valHorizProb">10</span>
         </div>
@@ -68,23 +68,14 @@
             <span id="valCrackThick">0.5</span>
         </div>
         <div class="control-group" style="border-color: #ff009e;">
-            <label>高亮大小%</label>
+            <label>高亮%</label>
             <input type="range" id="ctrlBlastScale" min="0" max="100" value="5">
             <span id="valBlastScale">5</span>
         </div>
 
-        <div class="switch-group">
-            <label>闪烁</label>
-            <label class="switch"><input type="checkbox" id="ctrlDynamic" checked><span class="slider"></span></label>
-        </div>
-        <div class="switch-group">
-            <label>裂纹</label>
-            <label class="switch"><input type="checkbox" id="ctrlCracks" checked><span class="slider"></span></label>
-        </div>
-        <div class="switch-group">
-            <label>双击</label>
-            <label class="switch"><input type="checkbox" id="ctrlDoubleStrike"><span class="slider"></span></label>
-        </div>
+        <div class="switch-group"><label>闪烁</label><label class="switch"><input type="checkbox" id="ctrlDynamic" checked><span class="slider"></span></label></div>
+        <div class="switch-group"><label>裂纹</label><label class="switch"><input type="checkbox" id="ctrlCracks" checked><span class="slider"></span></label></div>
+        <div class="switch-group"><label>双击</label><label class="switch"><input type="checkbox" id="ctrlDoubleStrike"><span class="slider"></span></label></div>
         <button id="btnClear" style="margin-left: auto;">REBOOT</button>
     </div>
 
@@ -117,20 +108,17 @@
             screenGlitch: 0, 
             polygons: [],
             cracks: [],
-            
             crackScale: 0.10,      
             crackThickness: 0.5,   
             blastScale: 0.05       
         };
 
-        // 绑定滑块事件
+        // 绑定事件
         document.getElementById('ctrlHorizProb').oninput = e => { state.horizProb = e.target.value / 100; document.getElementById('valHorizProb').innerText = e.target.value; };
         document.getElementById('ctrlPierceV').oninput = e => { state.pierceV = e.target.value / 100; document.getElementById('valPierceV').innerText = e.target.value; };
         document.getElementById('ctrlPierceH').oninput = e => { state.pierceH = e.target.value / 100; document.getElementById('valPierceH').innerText = e.target.value; };
-
         document.getElementById('ctrlLineWidth').oninput = e => { const val = e.target.value / 10; state.lineWidth = val; document.getElementById('valLineWidth').innerText = val.toFixed(1); };
         document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
-        
         document.getElementById('ctrlCrackScale').oninput = e => { state.crackScale = e.target.value / 100; document.getElementById('valCrackScale').innerText = e.target.value; };
         document.getElementById('ctrlCrackThick').oninput = e => { const val = e.target.value / 10; state.crackThickness = val; document.getElementById('valCrackThick').innerText = val.toFixed(1); };
         document.getElementById('ctrlBlastScale').oninput = e => { state.blastScale = e.target.value / 100; document.getElementById('valBlastScale').innerText = e.target.value; };
@@ -140,15 +128,12 @@
         document.getElementById('ctrlDoubleStrike').onchange = e => { state.isDoubleStrike = e.target.checked; }; 
         document.getElementById('btnClear').onclick = init;
 
-        // 🎯 重构：几何碎片化物理裂痕算法
         class CrackNode {
             constructor(cx, cy) {
                 this.cx = cx;
                 this.cy = cy;
                 this.rays = [];
                 this.webLines = []; 
-                this.microShards = []; // 微小玻璃渣
-                
                 this.baseBlastRadius = 30 + Math.random() * 20;
 
                 const numRays = 15 + Math.floor(Math.random() * 10);
@@ -158,24 +143,17 @@
                     
                     let currentX = 0, currentY = 0;
                     let segments = [];
-                    // 🎯 把平滑长线打碎成大量短小节段，模拟锯齿崩边
-                    let segCount = 15 + Math.floor(Math.random() * 20); 
+                    let segCount = 10 + Math.floor(Math.random() * 15);
                     let rayAngle = angle;
                     
                     for(let j=0; j<segCount; j++) {
-                        // 节段长短不一
-                        let r = (length / segCount) * (0.3 + Math.random() * 1.5); 
-                        
-                        // 🎯 锐利的玻璃折角跳跃：每隔几段就会有个突兀的转折
-                        if (Math.random() > 0.6) {
-                            rayAngle = angle + (Math.random() - 0.5) * 0.35; 
-                        }
+                        let r = (length / segCount) * (0.5 + Math.random()); 
+                        if (Math.random() > 0.6) rayAngle = angle + (Math.random() - 0.5) * 0.35; 
                         
                         let nextX = currentX + Math.cos(rayAngle) * r;
                         let nextY = currentY + Math.sin(rayAngle) * r;
                         segments.push({x1: currentX, y1: currentY, x2: nextX, y2: nextY});
                         
-                        // 生成不规则的横向网纹断裂
                         if (j > 0 && Math.random() > 0.7) {
                             const webAngle = rayAngle + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2) + (Math.random()-0.5)*0.5;
                             const webLen = 5 + Math.random() * 20; 
@@ -195,8 +173,6 @@
             draw() {
                 ctx.save();
                 ctx.translate(this.cx, this.cy);
-                
-                // 玻璃裂缝使用锐利折角
                 ctx.lineJoin = 'miter'; 
                 ctx.lineCap = 'butt';
                 ctx.globalAlpha = 1.0; 
@@ -207,7 +183,6 @@
                     blastGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
                     blastGradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.9)');
                     blastGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-                    
                     ctx.fillStyle = blastGradient;
                     ctx.beginPath();
                     ctx.arc(0, 0, blastRadius, 0, Math.PI * 2);
@@ -216,7 +191,6 @@
 
                 const scale = state.crackScale;
 
-                // 1. 核心物理骨架
                 ctx.beginPath();
                 this.rays.forEach(segments => {
                     segments.forEach(seg => {
@@ -232,8 +206,6 @@
                 ctx.lineWidth = state.crackThickness; 
                 ctx.stroke();
 
-                // 2. 🎯 微型玻璃碎渣层 (毛糙感来源)
-                // 通过在主裂缝旁边叠加一层低透明度、带随机便宜的乱线，制造出锯齿马赛克效果
                 ctx.beginPath();
                 this.rays.forEach(segments => {
                     segments.forEach(seg => {
@@ -245,11 +217,10 @@
                         }
                     });
                 });
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'; // 半透明碎渣
-                ctx.lineWidth = state.crackThickness * 0.5; // 更细
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'; 
+                ctx.lineWidth = state.crackThickness * 0.5; 
                 ctx.stroke();
 
-                // 3. 根部细微色散层
                 ctx.beginPath();
                 this.rays.forEach(segments => {
                      let firstSeg = segments[0];
@@ -330,10 +301,8 @@
                 });
                 
                 const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
-                
                 const w = Math.max(0.01, state.lineWidth); 
                 const step = Math.max(1, w); 
-                
                 const isHorizontal = this.absRandom(this.seed, 99.9) < state.horizProb; 
 
                 if (!isHorizontal) {
@@ -379,13 +348,16 @@
             }
         }
 
+        // 🎯 进化1：主分裂带折线化
         function generatePolyline(xBase, my, angleDeg) {
             const path = [];
-            const segments = 4; 
+            const segments = 15; // 增加段数带来丰富的折角
             const tanA = Math.tan(angleDeg * Math.PI / 180);
             for (let i = 0; i <= segments; i++) {
                 const y = (H / segments) * i;
-                const x = xBase + (y - my) * tanA + (Math.random() - 0.5) * 20;
+                // 强制首尾两点对齐，内部节点激烈随机偏移（+/- 30px）
+                const jitter = (i === 0 || i === segments) ? 0 : (Math.random() - 0.5) * 60; 
+                const x = xBase + (y - my) * tanA + jitter;
                 path.push([x, y]);
             }
             return path;
@@ -421,6 +393,29 @@
         function init() {
             state.polygons = [new Polygon([[0, 0], [W, 0], [W, H], [0, H]], 'base', null)];
             state.cracks = []; 
+        }
+
+        // 🎯 进化2：基于共用哈希的折线中间点生成器，确保相邻碎块无缝贴合
+        function getJaggedMidpoint(p1, p2) {
+            const xMin = Math.min(p1[0], p2[0]), yMin = Math.min(p1[1], p2[1]);
+            const xMax = Math.max(p1[0], p2[0]), yMax = Math.max(p1[1], p2[1]);
+            const mx = (p1[0] + p2[0]) / 2, my = (p1[1] + p2[1]) / 2;
+            
+            // 将唯一的线段两端点转化为稳定种子
+            const seed = xMin * 13.1 + yMin * 17.3 + xMax * 23.5 + yMax * 29.7;
+            const rand = Math.sin(seed * 12.9898) * 43758.5453;
+            const frac = rand - Math.floor(rand);
+            
+            const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
+            const len = Math.sqrt(dx*dx + dy*dy);
+            
+            if (len < 10) return [mx, my]; // 线段太短则不弯折
+            
+            // 安全的最大位移，防止多边形自交翻转
+            const offsetMag = Math.min(25, len * 0.2) * (frac - 0.5) * 2; 
+            const nx = -dy / len, ny = dx / len;
+            
+            return [mx + nx * offsetMag, my + ny * offsetMag];
         }
 
         function triggerImpact(cx, cy) {
@@ -466,11 +461,9 @@
         canvas.addEventListener('mousedown', (e) => {
             if (e.button === 2) return;
             state.screenGlitch = 8; 
-            
             const rect = canvas.getBoundingClientRect();
             const mx = (e.clientX - rect.left) * (W / rect.width);
             const my = (e.clientY - rect.top) * (H / rect.height);
-            
             triggerImpact(mx, my);
 
             if (state.isDoubleStrike) {
@@ -489,17 +482,25 @@
             state.polygons.push(new Polygon(squarePoints, 'pink', null));
         });
 
+        // 🎯 进化3：支持5边形折角碎片的切割重构
         function shatter(points, mx, my, impactSeed) {
             const res = [];
+            const center = [mx, my];
             for (let i = 0; i < points.length; i++) {
                 const p1 = points[i], p2 = points[(i + 1) % points.length];
                 const r = 0.3 + Math.random() * 0.4;
-                const mid = [p1[0] + (p2[0]-p1[0])*r, p1[1] + (p2[1]-p1[1])*r];
+                const midEdge = [p1[0] + (p2[0]-p1[0])*r, p1[1] + (p2[1]-p1[1])*r];
                 const type1 = Math.random() < 0.7 ? 'glitch' : 'black';
                 const type2 = Math.random() < 0.4 ? 'glitch' : 'black';
-                const getSeed = (s) => Math.random() < 0.5 ? impactSeed : Math.random();
-                res.push(new Polygon([p1, mid, [mx, my]], type1, getSeed()));
-                res.push(new Polygon([mid, p2, [mx, my]], type2, getSeed()));
+                const getSeed = () => Math.random() < 0.5 ? impactSeed : Math.random();
+
+                // 获取确定性的共用折角点
+                const jP1Center = getJaggedMidpoint(p1, center);
+                const jMidCenter = getJaggedMidpoint(midEdge, center);
+                const jP2Center = getJaggedMidpoint(p2, center);
+                
+                res.push(new Polygon([p1, midEdge, jMidCenter, center, jP1Center], type1, getSeed()));
+                res.push(new Polygon([midEdge, p2, jP2Center, center, jMidCenter], type2, getSeed()));
             }
             return res;
         }
