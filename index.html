@@ -2,17 +2,16 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v5.1 - 深度故障几何版</title>
+    <title>FRACTURE PRO v5.2 - 随机不规则几何版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
-        .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
         .branding { font-weight: 900; font-size: 14px; color: #fff; margin-right: 10px; letter-spacing: 1px; border-right: 1px solid #444; padding-right: 15px;}
         .control-group { display: flex; align-items: center; gap: 8px; background: #1a1a1a; padding: 5px 10px; border-radius: 4px; border: 1px solid #333; }
         .control-group label { font-size: 10px; color: #888; text-transform: uppercase; }
         .control-group span { font-size: 10px; color: #74ff06; width: 25px; text-align: right; font-family: monospace; }
         input[type="range"] { cursor: pointer; width: 60px; accent-color: #74ff06; }
         
-        /* 动态/静态开关 */
         .switch-group { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #888; text-transform: uppercase; margin-left: 10px;}
         .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
         .switch input { opacity: 0; width: 0; height: 0; }
@@ -21,17 +20,16 @@
         input:checked + .slider { background-color: #74ff06; }
         input:checked + .slider:before { transform: translateX(16px); }
 
-        button { background: #333; border: 1px solid #555; color: #fff; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: bold; transition: 0.2s; }
-        button:hover { border-color: #74ff06; background-color: #444; }
-        
-        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #050505; padding: 20px; overflow: auto; }
-        canvas { background-color: #74ff06; cursor: crosshair; image-rendering: pixelated; box-shadow: 0 0 30px rgba(116, 255, 6, 0.1); }
+        button { background: #333; border: 1px solid #555; color: #fff; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: bold; }
+        button:hover { border-color: #74ff06; color: #74ff06; }
+        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #050505; padding: 20px; }
+        canvas { background-color: #74ff06; cursor: crosshair; image-rendering: pixelated; }
     </style>
 </head>
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_PRO v5.1</div>
+        <div class="branding">FRACTURE_v5.2</div>
         
         <div class="control-group">
             <label>线宽</label>
@@ -46,14 +44,14 @@
         </div>
 
         <div class="switch-group">
-            <label>动态信号</label>
+            <label>动态</label>
             <label class="switch">
                 <input type="checkbox" id="ctrlDynamic" checked>
                 <span class="slider"></span>
             </label>
         </div>
         
-        <button id="btnClear" style="margin-left: auto;">RESET SYSTEM</button>
+        <button id="btnClear" style="margin-left: auto;">REBOOT</button>
     </div>
 
     <div class="workspace">
@@ -67,12 +65,11 @@
         let state = {
             density: 0.7,
             lineWidth: 2,
-            impactWidth: 220, // 约 1/10 画布宽度
+            impactWidth: 200,
             isDynamic: true,
             polygons: [] 
         };
 
-        // UI 绑定
         document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
         document.getElementById('ctrlLineWidth').oninput = e => { state.lineWidth = parseInt(e.target.value); document.getElementById('valLineWidth').innerText = e.target.value; };
         document.getElementById('ctrlDynamic').onchange = e => { state.isDynamic = e.target.checked; };
@@ -81,8 +78,8 @@
         class Polygon {
             constructor(points, type = 'base') {
                 this.points = points; 
-                this.type = type; // 'base' (未破坏), 'black' (纯黑), 'glitch' (黑底+线)
-                this.seed = Math.random(); // 静态模式种子
+                this.type = type; 
+                this.seed = Math.random();
             }
 
             draw() {
@@ -96,43 +93,34 @@
                     ctx.fillStyle = '#74ff06';
                     ctx.fill();
                 } else {
-                    // 只要碎裂区域，底色全是黑
                     ctx.fillStyle = '#000';
                     ctx.fill();
-                    
                     if (this.type === 'glitch') {
                         ctx.clip();
                         this.drawGlitchLines();
                     }
                 }
 
-                // 物理裂缝线
                 if (this.type !== 'base') {
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
                     ctx.lineWidth = 0.5;
                     ctx.stroke();
                 }
                 ctx.restore();
             }
 
-            // 故障线逻辑
             drawGlitchLines() {
                 let minX = Infinity, maxX = -Infinity;
                 this.points.forEach(p => { if(p[0] < minX) minX = p[0]; if(p[0] > maxX) maxX = p[0]; });
-                
                 const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
                 const w = state.lineWidth;
-                
-                // 静态模式使用固定随机序列
                 let prng = this.getPseudoRandom(this.seed);
                 let randomFunc = state.isDynamic ? Math.random : prng;
 
                 for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
                     if (randomFunc() < state.density) {
                         ctx.fillStyle = colors[Math.floor(randomFunc() * colors.length)];
-                        // 加入位置噪声
-                        const xOffset = (randomFunc() - 0.5) * 4; 
-                        ctx.fillRect(x + xOffset, 0, w, canvas.height); 
+                        ctx.fillRect(x + (randomFunc() - 0.5) * 4, 0, w, canvas.height); 
                     }
                 }
             }
@@ -143,43 +131,26 @@
                 return () => {
                     m_z = (36969 * (m_z & 65535) + (m_z >> 16)) & 0xffffffff;
                     m_w = (18000 * (m_w & 65535) + (m_w >> 16)) & 0xffffffff;
-                    let res = (((m_z << 16) + m_w) & 0xffffffff) / 4294967296;
-                    return res + 0.5;
+                    return (((m_z << 16) + m_w) & 0xffffffff) / 4294967296 + 0.5;
                 }
             }
         }
 
         function init() {
-            state.polygons = [
-                new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]], 'base')
-            ];
+            state.polygons = [new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]], 'base')];
         }
 
-        function isPointInPoly(pt, poly) {
-            let x = pt[0], y = pt[1];
-            let inside = false;
-            for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-                let xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
-                let intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-                if (intersect) inside = !inside;
-            }
-            return inside;
-        }
-
-        // 斜向切割函数
         function sliceByAngledLine(polyPoints, xBase, my, angleDeg) {
             let left = [], right = [];
             const tanA = Math.tan(angleDeg * Math.PI / 180);
             const getSide = (p) => p[0] - (xBase + (p[1] - my) * tanA);
-
             for (let i = 0; i < polyPoints.length; i++) {
                 let p1 = polyPoints[i], p2 = polyPoints[(i + 1) % polyPoints.length];
                 let s1 = getSide(p1), s2 = getSide(p2);
                 if (s1 < 0) left.push(p1); else right.push(p1);
                 if ((s1 < 0 && s2 >= 0) || (s1 >= 0 && s2 < 0)) {
-                    const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
-                    const t = (xBase - p1[0] + (p1[1] - my) * tanA) / (dx - dy * tanA);
-                    const inter = [p1[0] + t * dx, p1[1] + t * dy];
+                    const t = (xBase - p1[0] + (p1[1] - my) * tanA) / ((p2[0] - p1[0]) - (p2[1] - p1[1]) * tanA);
+                    const inter = [p1[0] + t * (p2[0] - p1[0]), p1[1] + t * (p2[1] - p1[1])];
                     left.push(inter); right.push(inter);
                 }
             }
@@ -191,26 +162,24 @@
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-            // 每次点击随机左右边界角度：30~45 度
-            // 左边正偏，右边负偏
-            const angleL = 30 + Math.random() * 15;
-            const angleR = -(30 + Math.random() * 15);
-            const xL = mx - state.impactWidth / 2;
-            const xR = mx + state.impactWidth / 2;
+            // 💎 核心修改：左右角度完全随机化
+            // 每次点击，角度的方向 (正负) 和 大小 (20-50度) 都是随机的
+            const angleL = (Math.random() > 0.5 ? 1 : -1) * (20 + Math.random() * 30);
+            const angleR = (Math.random() > 0.5 ? 1 : -1) * (20 + Math.random() * 30);
+            
+            const xL = mx - (40 + Math.random() * 80); // 随机左偏移
+            const xR = mx + (40 + Math.random() * 80); // 随机右偏移
 
             for (let i = state.polygons.length - 1; i >= 0; i--) {
                 const target = state.polygons[i];
                 if (isPointInPoly([mx, my], target.points)) {
-                    // 1. 切出左侧不规则边界
                     let [p1, pRest] = sliceByAngledLine(target.points, xL, my, angleL);
                     if (p1.length > 2 && pRest.length > 2) {
-                        // 2. 切出右侧不规则边界，得到中间的随机四边形
                         let [centerQuad, p2] = sliceByAngledLine(pRest, xR, my, angleR);
                         if (centerQuad.length > 2) {
                             shatter(centerQuad, mx, my);
                             state.polygons.splice(i, 1);
-                            if (p1.length > 2) state.polygons.push(new Polygon(p1, target.type));
-                            if (p2.length > 2) state.polygons.push(new Polygon(p2, target.type));
+                            state.polygons.push(new Polygon(p1, target.type), new Polygon(p2, target.type));
                         } else shatter(target.points, mx, my, i);
                     } else shatter(target.points, mx, my, i);
                     break;
@@ -218,20 +187,22 @@
             }
         });
 
-        // 递归破碎逻辑
+        function isPointInPoly(pt, poly) {
+            let x = pt[0], y = pt[1], inside = false;
+            for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+                if (((poly[i][1] > y) != (poly[j][1] > y)) && (x < (poly[j][0] - poly[i][0]) * (y - poly[i][1]) / (poly[j][1] - poly[i][1]) + poly[i][0])) inside = !inside;
+            }
+            return inside;
+        }
+
         function shatter(points, mx, my, index = -1) {
             const newPolys = [];
             for (let i = 0; i < points.length; i++) {
                 const p1 = points[i], p2 = points[(i + 1) % points.length];
-                const ratio = 0.2 + Math.random() * 0.6;
-                const mid = [p1[0] + (p2[0]-p1[0])*ratio, p1[1] + (p2[1]-p1[1])*ratio];
-
-                // 强制黑底，随机分配故障线
-                const type1 = Math.random() < 0.65 ? 'glitch' : 'black';
-                const type2 = Math.random() < 0.4 ? 'glitch' : 'black';
-
-                newPolys.push(new Polygon([p1, mid, [mx, my]], type1));
-                newPolys.push(new Polygon([mid, p2, [mx, my]], type2));
+                const r = 0.2 + Math.random() * 0.6;
+                const mid = [p1[0] + (p2[0]-p1[0])*r, p1[1] + (p2[1]-p1[1])*r];
+                newPolys.push(new Polygon([p1, mid, [mx, my]], Math.random() < 0.7 ? 'glitch' : 'black'));
+                newPolys.push(new Polygon([mid, p2, [mx, my]], Math.random() < 0.4 ? 'glitch' : 'black'));
             }
             if (index !== -1) state.polygons.splice(index, 1, ...newPolys);
             else state.polygons.push(...newPolys);
@@ -243,8 +214,7 @@
             requestAnimationFrame(render);
         }
 
-        init();
-        render();
+        init(); render();
     </script>
 </body>
 </html>
