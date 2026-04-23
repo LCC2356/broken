@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v8.7 - 纯粹物理折线版</title>
+    <title>FRACTURE PRO v8.8 - 有机折线故障版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -29,7 +29,7 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v8.7</div>
+        <div class="branding">FRACTURE_v8.8</div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="1" max="150" value="5">
@@ -51,21 +51,11 @@
             <input type="range" id="ctrlPierceV" min="0" max="100" value="90">
             <span id="valPierceV">90</span>
         </div>
-        <div class="control-group" style="border-color: #0044FF;">
-            <label>横线贯穿%</label>
-            <input type="range" id="ctrlPierceH" min="0" max="100" value="10">
-            <span id="valPierceH">10</span>
-        </div>
         
         <div class="control-group" style="border-color: #ff009e;">
             <label>裂纹长度%</label>
             <input type="range" id="ctrlCrackScale" min="1" max="100" value="10">
             <span id="valCrackScale">10</span>
-        </div>
-        <div class="control-group" style="border-color: #ff009e;">
-            <label>裂纹粗细</label>
-            <input type="range" id="ctrlCrackThick" min="1" max="50" value="5">
-            <span id="valCrackThick">0.5</span>
         </div>
         <div class="control-group" style="border-color: #ff009e;">
             <label>高亮%</label>
@@ -75,7 +65,6 @@
 
         <div class="switch-group"><label>闪烁</label><label class="switch"><input type="checkbox" id="ctrlDynamic" checked><span class="slider"></span></label></div>
         <div class="switch-group"><label>裂纹</label><label class="switch"><input type="checkbox" id="ctrlCracks" checked><span class="slider"></span></label></div>
-        <div class="switch-group"><label>双击</label><label class="switch"><input type="checkbox" id="ctrlDoubleStrike"><span class="slider"></span></label></div>
         <button id="btnClear" style="margin-left: auto;">REBOOT</button>
     </div>
 
@@ -102,9 +91,7 @@
             pierceV: 0.90,   
             pierceH: 0.10,   
             isDynamic: true,
-            isDoubleStrike: false, 
             isCracksEnabled: true, 
-            impactWidth: 160,
             screenGlitch: 0, 
             polygons: [],
             cracks: [],
@@ -116,55 +103,40 @@
         // 绑定事件
         document.getElementById('ctrlHorizProb').oninput = e => { state.horizProb = e.target.value / 100; document.getElementById('valHorizProb').innerText = e.target.value; };
         document.getElementById('ctrlPierceV').oninput = e => { state.pierceV = e.target.value / 100; document.getElementById('valPierceV').innerText = e.target.value; };
-        document.getElementById('ctrlPierceH').oninput = e => { state.pierceH = e.target.value / 100; document.getElementById('valPierceH').innerText = e.target.value; };
         document.getElementById('ctrlLineWidth').oninput = e => { const val = e.target.value / 10; state.lineWidth = val; document.getElementById('valLineWidth').innerText = val.toFixed(1); };
         document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
         document.getElementById('ctrlCrackScale').oninput = e => { state.crackScale = e.target.value / 100; document.getElementById('valCrackScale').innerText = e.target.value; };
-        document.getElementById('ctrlCrackThick').oninput = e => { const val = e.target.value / 10; state.crackThickness = val; document.getElementById('valCrackThick').innerText = val.toFixed(1); };
         document.getElementById('ctrlBlastScale').oninput = e => { state.blastScale = e.target.value / 100; document.getElementById('valBlastScale').innerText = e.target.value; };
-
         document.getElementById('ctrlDynamic').onchange = e => { state.isDynamic = e.target.checked; };
         document.getElementById('ctrlCracks').onchange = e => { state.isCracksEnabled = e.target.checked; };
-        document.getElementById('ctrlDoubleStrike').onchange = e => { state.isDoubleStrike = e.target.checked; }; 
         document.getElementById('btnClear').onclick = init;
 
+        // --- 裂纹逻辑 ---
         class CrackNode {
             constructor(cx, cy) {
-                this.cx = cx;
-                this.cy = cy;
-                this.rays = [];
-                this.webLines = []; 
+                this.cx = cx; this.cy = cy;
+                this.rays = []; this.webLines = []; 
                 this.baseBlastRadius = 30 + Math.random() * 20;
-
                 const numRays = 15 + Math.floor(Math.random() * 10);
                 for(let i=0; i<numRays; i++) {
                     const angle = (i / numRays) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
                     const length = (H * 0.5) + Math.random() * 500; 
-                    
                     let currentX = 0, currentY = 0;
                     let segments = [];
                     let segCount = 10 + Math.floor(Math.random() * 15);
                     let rayAngle = angle;
-                    
                     for(let j=0; j<segCount; j++) {
                         let r = (length / segCount) * (0.5 + Math.random()); 
                         if (Math.random() > 0.6) rayAngle = angle + (Math.random() - 0.5) * 0.35; 
-                        
                         let nextX = currentX + Math.cos(rayAngle) * r;
                         let nextY = currentY + Math.sin(rayAngle) * r;
                         segments.push({x1: currentX, y1: currentY, x2: nextX, y2: nextY});
-                        
                         if (j > 0 && Math.random() > 0.7) {
                             const webAngle = rayAngle + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2) + (Math.random()-0.5)*0.5;
                             const webLen = 5 + Math.random() * 20; 
-                            this.webLines.push({
-                                x1: currentX, y1: currentY, 
-                                x2: currentX + Math.cos(webAngle)*webLen, 
-                                y2: currentY + Math.sin(webAngle)*webLen
-                            });
+                            this.webLines.push({ x1: currentX, y1: currentY, x2: currentX + Math.cos(webAngle)*webLen, y2: currentY + Math.sin(webAngle)*webLen });
                         }
-                        currentX = nextX;
-                        currentY = nextY;
+                        currentX = nextX; currentY = nextY;
                     }
                     this.rays.push(segments);
                 }
@@ -173,69 +145,24 @@
             draw() {
                 ctx.save();
                 ctx.translate(this.cx, this.cy);
-                ctx.lineJoin = 'miter'; 
-                ctx.lineCap = 'butt';
-                ctx.globalAlpha = 1.0; 
-
                 if (state.blastScale > 0) {
                     const blastRadius = this.baseBlastRadius * state.blastScale;
-                    const blastGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, blastRadius);
-                    blastGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-                    blastGradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.9)');
-                    blastGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-                    ctx.fillStyle = blastGradient;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, blastRadius, 0, Math.PI * 2);
-                    ctx.fill();
+                    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, blastRadius);
+                    grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+                    grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                    ctx.fillStyle = grad;
+                    ctx.beginPath(); ctx.arc(0, 0, blastRadius, 0, Math.PI * 2); ctx.fill();
                 }
-
                 const scale = state.crackScale;
-
                 ctx.beginPath();
-                this.rays.forEach(segments => {
-                    segments.forEach(seg => {
-                        ctx.moveTo(seg.x1 * scale, seg.y1 * scale);
-                        ctx.lineTo(seg.x2 * scale, seg.y2 * scale);
-                    });
-                });
-                this.webLines.forEach(web => {
-                    ctx.moveTo(web.x1 * scale, web.y1 * scale);
-                    ctx.lineTo(web.x2 * scale, web.y2 * scale);
-                });
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-                ctx.lineWidth = state.crackThickness; 
-                ctx.stroke();
-
-                ctx.beginPath();
-                this.rays.forEach(segments => {
-                    segments.forEach(seg => {
-                        if (Math.random() > 0.4) {
-                            const offsetX = (Math.random() - 0.5) * 3;
-                            const offsetY = (Math.random() - 0.5) * 3;
-                            ctx.moveTo(seg.x1 * scale + offsetX, seg.y1 * scale + offsetY);
-                            ctx.lineTo(seg.x2 * scale + offsetX, seg.y2 * scale + offsetY);
-                        }
-                    });
-                });
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'; 
-                ctx.lineWidth = state.crackThickness * 0.5; 
-                ctx.stroke();
-
-                ctx.beginPath();
-                this.rays.forEach(segments => {
-                     let firstSeg = segments[0];
-                     ctx.moveTo(firstSeg.x1 * scale, firstSeg.y1 * scale);
-                     ctx.lineTo(firstSeg.x2 * scale, firstSeg.y2 * scale);
-                });
-                ctx.strokeStyle = Math.random() > 0.5 ? 'rgba(0, 255, 255, 0.5)' : 'rgba(255, 0, 255, 0.5)';
-                ctx.lineWidth = state.crackThickness; 
-                ctx.globalCompositeOperation = 'screen';
-                ctx.stroke();
-
+                this.rays.forEach(s => s.forEach(seg => { ctx.moveTo(seg.x1*scale, seg.y1*scale); ctx.lineTo(seg.x2*scale, seg.y2*scale); }));
+                this.webLines.forEach(w => { ctx.moveTo(w.x1*scale, w.y1*scale); ctx.lineTo(w.x2*scale, w.y2*scale); });
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.lineWidth = 0.5; ctx.stroke();
                 ctx.restore();
             }
         }
 
+        // --- 多边形与纹理 ---
         class Polygon {
             constructor(points, type = 'base', seed = null) {
                 this.points = points; 
@@ -266,78 +193,59 @@
                     ctx.fillStyle = '#ff009e'; ctx.fill();
                 } else {
                     ctx.fillStyle = '#000'; ctx.fill();
-                    if (this.type === 'glitch' && state.lineWidth > 0) {
-                        ctx.save();
-                        ctx.clip();
-                        this.drawGlitchLines();
-                        this.drawInnerGradient();
-                        ctx.restore();
-                    }
+                    // 🎯 进化：在黑色/故障碎块内部绘制有机纹理
+                    ctx.save();
+                    ctx.clip();
+                    this.drawInternalGlitch();
+                    ctx.restore();
                 }
 
                 if (this.type !== 'base') {
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-                    ctx.lineWidth = 0.5;
-                    ctx.stroke();
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                    ctx.lineWidth = 0.5; ctx.stroke();
                 }
                 ctx.restore();
             }
 
-            drawInnerGradient() {
-                let cx = 0, cy = 0; this.points.forEach(p => { cx += p[0]; cy += p[1]; });
-                cx /= this.points.length; cy /= this.points.length;
-                const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 60);
-                grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-                grad.addColorStop(1, 'rgba(255, 255, 255, 0.25)');
-                ctx.fillStyle = grad; ctx.fill();
+            // 🎯 核心纹理逻辑
+            drawInternalGlitch() {
+                const s = this.seed;
+                // 1. 故障扫描线
+                const lineCount = 3 + Math.floor(this.absRandom(s, 10) * 8);
+                for(let i=0; i<lineCount; i++) {
+                    const y = H * this.absRandom(s, i * 5.5);
+                    const h = 0.5 + this.absRandom(s, i * 2) * 2;
+                    ctx.fillStyle = (this.absRandom(s, i) > 0.5) ? 'rgba(0, 255, 255, 0.3)' : 'rgba(255, 0, 158, 0.3)';
+                    ctx.fillRect(0, y, W, h);
+                }
+                // 2. 随机像素点/电路块
+                ctx.fillStyle = '#74ff06';
+                for(let i=0; i<15; i++) {
+                    if (this.absRandom(s, i*12) > 0.7) {
+                        const px = W * this.absRandom(s, i*3);
+                        const py = H * this.absRandom(s, i*7);
+                        ctx.fillRect(px, py, 2, 2);
+                    }
+                }
+                // 3. 原有的Glitch Lines逻辑
+                if (state.lineWidth > 0) this.drawLegacyGlitchLines();
             }
 
-            drawGlitchLines() {
-                let minX = W, maxX = 0;
-                let minY = H, maxY = 0;
+            drawLegacyGlitchLines() {
+                let minX = W, maxX = 0, minY = H, maxY = 0;
                 this.points.forEach(p => { 
                     if(p[0] < minX) minX = p[0]; if(p[0] > maxX) maxX = p[0]; 
                     if(p[1] < minY) minY = p[1]; if(p[1] > maxY) maxY = p[1];
                 });
-                
-                const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
+                const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#74ff06'];
                 const w = Math.max(0.01, state.lineWidth); 
-                const step = Math.max(1, w); 
-                const isHorizontal = this.absRandom(this.seed, 99.9) < state.horizProb; 
-
-                if (!isHorizontal) {
-                    for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += step) {
-                        const isPiercing = this.absRandom(x, 111.11) < state.pierceV;
-                        const seedToUse = isPiercing ? 222.22 : this.seed;
-                        const noise = this.absRandom(x, seedToUse);
-                        
-                        if (noise < state.density) {
-                            if (state.isDynamic) {
-                                const flicker = Math.random();
-                                if (flicker < 0.1) continue;
-                                if (flicker < 0.3) ctx.globalAlpha = 0.4;
-                            }
-                            ctx.fillStyle = colors[Math.floor(noise * colors.length * 13) % colors.length];
-                            ctx.fillRect(x, 0, w, H); 
-                            ctx.globalAlpha = 1.0;
-                        }
-                    }
-                } else {
-                    for (let y = Math.floor(minY); y <= Math.ceil(maxY); y += step) {
-                        const isPiercing = this.absRandom(y, 333.33) < state.pierceH;
-                        const seedToUse = isPiercing ? 444.44 : this.seed;
-                        const noise = this.absRandom(y, seedToUse + 500); 
-                        
-                        if (noise < state.density) {
-                            if (state.isDynamic) {
-                                const flicker = Math.random();
-                                if (flicker < 0.1) continue;
-                                if (flicker < 0.3) ctx.globalAlpha = 0.4;
-                            }
-                            ctx.fillStyle = colors[Math.floor(noise * colors.length * 13) % colors.length];
-                            ctx.fillRect(0, y, W, w); 
-                            ctx.globalAlpha = 1.0;
-                        }
+                const step = Math.max(1.5, w * 2); 
+                for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += step) {
+                    const noise = this.absRandom(x, this.seed);
+                    if (noise < state.density) {
+                        if (state.isDynamic && Math.random() < 0.1) continue;
+                        ctx.fillStyle = colors[Math.floor(noise * colors.length * 7) % colors.length];
+                        ctx.fillRect(x, 0, w, H); 
                     }
                 }
             }
@@ -348,17 +256,17 @@
             }
         }
 
-        // 🎯 进化1：主分裂带折线化
-        function generatePolyline(xBase, my, angleDeg) {
+        // --- 切割与生成逻辑 ---
+
+        // 🎯 进化1：生成有机折线路径
+        function generateOrganicPath(xBase, jitter = 40) {
             const path = [];
-            const segments = 15; // 增加段数带来丰富的折角
-            const tanA = Math.tan(angleDeg * Math.PI / 180);
+            const segments = 12;
             for (let i = 0; i <= segments; i++) {
                 const y = (H / segments) * i;
-                // 强制首尾两点对齐，内部节点激烈随机偏移（+/- 30px）
-                const jitter = (i === 0 || i === segments) ? 0 : (Math.random() - 0.5) * 60; 
-                const x = xBase + (y - my) * tanA + jitter;
-                path.push([x, y]);
+                // 首尾保持对齐，中间随机偏移
+                const offset = (i === 0 || i === segments) ? 0 : (Math.random() - 0.5) * jitter;
+                path.push([xBase + offset, y]);
             }
             return path;
         }
@@ -390,57 +298,29 @@
             return [left, right];
         }
 
-        function init() {
-            state.polygons = [new Polygon([[0, 0], [W, 0], [W, H], [0, H]], 'base', null)];
-            state.cracks = []; 
-        }
-
-        // 🎯 进化2：基于共用哈希的折线中间点生成器，确保相邻碎块无缝贴合
         function getJaggedMidpoint(p1, p2) {
-            const xMin = Math.min(p1[0], p2[0]), yMin = Math.min(p1[1], p2[1]);
-            const xMax = Math.max(p1[0], p2[0]), yMax = Math.max(p1[1], p2[1]);
             const mx = (p1[0] + p2[0]) / 2, my = (p1[1] + p2[1]) / 2;
-            
-            // 将唯一的线段两端点转化为稳定种子
-            const seed = xMin * 13.1 + yMin * 17.3 + xMax * 23.5 + yMax * 29.7;
-            const rand = Math.sin(seed * 12.9898) * 43758.5453;
-            const frac = rand - Math.floor(rand);
-            
+            const seed = p1[0] * 13 + p1[1] * 17 + p2[0] * 23 + p2[1] * 29;
+            const rand = (Math.sin(seed) * 43758.5453) % 1;
             const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
             const len = Math.sqrt(dx*dx + dy*dy);
-            
-            if (len < 10) return [mx, my]; // 线段太短则不弯折
-            
-            // 安全的最大位移，防止多边形自交翻转
-            const offsetMag = Math.min(25, len * 0.2) * (frac - 0.5) * 2; 
+            if (len < 5) return [mx, my];
+            const offsetMag = Math.min(15, len * 0.3) * rand;
             const nx = -dy / len, ny = dx / len;
-            
             return [mx + nx * offsetMag, my + ny * offsetMag];
         }
 
         function triggerImpact(cx, cy) {
-            if (state.isCracksEnabled) {
-                state.cracks.push(new CrackNode(cx, cy));
-                if (state.cracks.length > 150) state.cracks.shift(); 
-            }
-
-            const angL = (Math.random() - 0.5) * 30; 
-            const angR = (Math.random() - 0.5) * 30;
-            const xL = cx - (40 + Math.random() * 40);
-            const xR = cx + (40 + Math.random() * 40);
-            const pathL = generatePolyline(xL, cy, angL);
-            const pathR = generatePolyline(xR, cy, angR);
+            if (state.isCracksEnabled) state.cracks.push(new CrackNode(cx, cy));
+            
+            // 🎯 进化：使用有机折线进行初始切割
+            const pathL = generateOrganicPath(cx - 50, 60);
+            const pathR = generateOrganicPath(cx + 50, 60);
             
             let nextPolygons = [];
             const impactSeed = Math.random();
             
             state.polygons.forEach(target => {
-                let minX = W, maxX = 0;
-                target.points.forEach(p => { if(p[0]<minX) minX=p[0]; if(p[0]>maxX) maxX=p[0]; });
-                if (maxX < xL - 100 || minX > xR + 100) {
-                    nextPolygons.push(target);
-                    return;
-                }
                 let [pLeft, pRest] = sliceByPolyline(target.points, pathL);
                 if (pRest.length > 2) {
                     let [pMid, pRight] = sliceByPolyline(pRest, pathR);
@@ -454,90 +334,56 @@
                     if (pLeft.length > 2) nextPolygons.push(new Polygon(pLeft, target.type, target.seed));
                 }
             });
-            
-            state.polygons = nextPolygons.filter(p => p.getArea() > 0.5).slice(0, 1000);
+            state.polygons = nextPolygons.filter(p => p.getArea() > 0.2).slice(0, 800);
+            state.screenGlitch = 6;
         }
 
-        canvas.addEventListener('mousedown', (e) => {
-            if (e.button === 2) return;
-            state.screenGlitch = 8; 
-            const rect = canvas.getBoundingClientRect();
-            const mx = (e.clientX - rect.left) * (W / rect.width);
-            const my = (e.clientY - rect.top) * (H / rect.height);
-            triggerImpact(mx, my);
-
-            if (state.isDoubleStrike) {
-                const offsetX = (Math.random() - 0.5) * 60;
-                const offsetY = (Math.random() - 0.5) * 60;
-                triggerImpact(mx + offsetX, my + offsetY);
-            }
-        });
-
-        canvas.addEventListener('contextmenu', (e) => {
-            e.preventDefault(); 
-            const rect = canvas.getBoundingClientRect();
-            const mx = (e.clientX - rect.left) * (W / rect.width);
-            const half = H / 2;
-            const squarePoints = [[mx - half, 0], [mx + half, 0], [mx + half, H], [mx - half, H]];
-            state.polygons.push(new Polygon(squarePoints, 'pink', null));
-        });
-
-        // 🎯 进化3：支持5边形折角碎片的切割重构
         function shatter(points, mx, my, impactSeed) {
-            const res = [];
-            const center = [mx, my];
+            const res = []; const center = [mx, my];
             for (let i = 0; i < points.length; i++) {
                 const p1 = points[i], p2 = points[(i + 1) % points.length];
-                const r = 0.3 + Math.random() * 0.4;
+                const r = 0.4 + Math.random() * 0.2;
                 const midEdge = [p1[0] + (p2[0]-p1[0])*r, p1[1] + (p2[1]-p1[1])*r];
-                const type1 = Math.random() < 0.7 ? 'glitch' : 'black';
-                const type2 = Math.random() < 0.4 ? 'glitch' : 'black';
-                const getSeed = () => Math.random() < 0.5 ? impactSeed : Math.random();
-
-                // 获取确定性的共用折角点
-                const jP1Center = getJaggedMidpoint(p1, center);
-                const jMidCenter = getJaggedMidpoint(midEdge, center);
-                const jP2Center = getJaggedMidpoint(p2, center);
-                
-                res.push(new Polygon([p1, midEdge, jMidCenter, center, jP1Center], type1, getSeed()));
-                res.push(new Polygon([midEdge, p2, jP2Center, center, jMidCenter], type2, getSeed()));
+                const type = Math.random() < 0.6 ? 'glitch' : 'black';
+                const jP1 = getJaggedMidpoint(p1, center);
+                const jMid = getJaggedMidpoint(midEdge, center);
+                const jP2 = getJaggedMidpoint(p2, center);
+                res.push(new Polygon([p1, midEdge, jMid, center, jP1], type, Math.random()));
+                res.push(new Polygon([midEdge, p2, jP2, center, jMid], type, Math.random()));
             }
             return res;
         }
 
+        // --- 交互与渲染 ---
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = (e.clientX - rect.left) * (W / rect.width);
+            const my = (e.clientY - rect.top) * (H / rect.height);
+            triggerImpact(mx, my);
+        });
+
+        function init() {
+            state.polygons = [new Polygon([[0, 0], [W, 0], [W, H], [0, H]], 'base', null)];
+            state.cracks = [];
+        }
+
         function render() {
             ctx.clearRect(0, 0, W, H);
-            ctx.save(); 
+            ctx.save();
             if (state.screenGlitch > 0) {
                 state.screenGlitch--;
-                const shake = state.screenGlitch * 1.5; 
-                ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+                ctx.translate((Math.random()-0.5)*10, (Math.random()-0.5)*10);
             }
-            
             state.polygons.forEach(p => p.draw());
             state.cracks.forEach(c => c.draw());
+            ctx.restore();
 
-            if (state.screenGlitch > 0) {
-                if (Math.random() > 0.5) {
-                    ctx.globalCompositeOperation = 'difference';
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; 
-                    ctx.fillRect(0, 0, W, H);
-                    ctx.globalCompositeOperation = 'source-over'; 
-                } else if (Math.random() > 0.7) {
-                    ctx.fillStyle = 'rgba(255, 0, 158, 0.15)'; 
-                    ctx.fillRect(0, 0, W, H);
-                }
-            }
-            ctx.restore(); 
-            
-            if (state.screenGlitch > 0 && Math.random() > 0.3) {
-                ctx.save();
-                ctx.setTransform(1, 0, 0, 1, 0, 0); 
-                const sliceY = Math.random() * canvas.height;
-                const sliceH = (Math.random() * 8 + 2) * dpr; 
-                const offset = (Math.random() - 0.5) * 40 * dpr;
-                ctx.drawImage(canvas, 0, sliceY, canvas.width, sliceH, offset, sliceY, canvas.width, sliceH);
-                ctx.restore();
+            // 全局切片故障
+            if (state.screenGlitch > 0 && Math.random() > 0.4) {
+                const sy = Math.random() * canvas.height;
+                const sh = Math.random() * 20 * dpr;
+                const off = (Math.random()-0.5) * 50 * dpr;
+                ctx.drawImage(canvas, 0, sy, canvas.width, sh, off, sy, canvas.width, sh);
             }
             requestAnimationFrame(render);
         }
