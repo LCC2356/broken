@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v8.5 - 交互强化稳定版</title>
+    <title>FRACTURE PRO v8.6 - 像素增强版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -10,8 +10,10 @@
         .control-group { display: flex; align-items: center; gap: 8px; background: #1a1a1a; padding: 5px 10px; border-radius: 4px; border: 1px solid #333; }
         .control-group label { font-size: 10px; color: #888; text-transform: uppercase; }
         .control-group span { font-size: 10px; color: #74ff06; width: 25px; text-align: right; font-family: monospace; }
+        
         input[type="number"] { background: #000; border: 1px solid #444; color: #74ff06; font-size: 11px; width: 45px; padding: 2px 5px; outline: none; border-radius: 2px; }
         input[type="range"] { cursor: pointer; width: 70px; accent-color: #74ff06; }
+        
         .switch-group { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #888; text-transform: uppercase; }
         .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
         .switch input { opacity: 0; width: 0; height: 0; }
@@ -19,6 +21,7 @@
         .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
         input:checked + .slider { background-color: #74ff06; }
         input:checked + .slider:before { transform: translateX(16px); }
+
         button { background: #333; border: 1px solid #555; color: #fff; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: bold; }
         button:hover { border-color: #74ff06; color: #74ff06; }
         .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #050505; padding: 20px; }
@@ -28,9 +31,9 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v8.5</div>
+        <div class="branding">FRACTURE_v8.6</div>
         <div class="control-group">
-            <label>线宽</label>
+            <label>故障线宽</label>
             <input type="number" id="ctrlLineWidth" value="1" min="0">
         </div>
         <div class="control-group">
@@ -66,9 +69,9 @@
             polygons: [] 
         };
 
-        // UI 绑定
+        // UI 事件绑定
         document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
-        document.getElementById('ctrlLineWidth').onchange = e => { state.lineWidth = parseInt(e.target.value) || 0; };
+        document.getElementById('ctrlLineWidth').oninput = e => { state.lineWidth = parseFloat(e.target.value) || 0; };
         document.getElementById('ctrlSpeed').oninput = e => { state.speed = e.target.value / 100; document.getElementById('valSpeed').innerText = e.target.value; };
         document.getElementById('ctrlDynamic').onchange = e => { state.isDynamic = e.target.checked; };
         document.getElementById('btnClear').onclick = init;
@@ -124,8 +127,13 @@
                 let minX = 2000, maxX = 0;
                 this.points.forEach(p => { if(p[0] < minX) minX = p[0]; if(p[0] > maxX) maxX = p[0]; });
                 const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
-                const w = Math.max(1, state.lineWidth);
-                for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
+                
+                // 💎 核心修复：线宽补偿
+                // 当设置线宽为1时，实际绘制1.2px以抵消Canvas缩放带来的模糊
+                const w = state.lineWidth === 1 ? 1.2 : Math.max(0.5, state.lineWidth);
+                const step = Math.max(1, state.lineWidth); 
+
+                for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += step) {
                     const noise = this.absRandom(x, this.seed);
                     if (noise < state.density) {
                         if (state.isDynamic) {
@@ -135,7 +143,8 @@
                             if (flicker < 0.5) ctx.globalAlpha = 0.4;
                         }
                         ctx.fillStyle = colors[Math.floor(noise * colors.length * 13) % colors.length];
-                        ctx.fillRect(x, 0, w, canvas.height); 
+                        // 使用 Math.floor(x) 确保物理像素对齐
+                        ctx.fillRect(Math.floor(x), 0, w, canvas.height); 
                         ctx.globalAlpha = 1.0;
                     }
                 }
@@ -195,7 +204,6 @@
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-            // 生成全局冲击带 (8.0 原版逻辑)
             const angL = (Math.random() - 0.5) * 30;
             const angR = (Math.random() - 0.5) * 30;
             const xL = mx - (40 + Math.random() * 40);
@@ -207,13 +215,10 @@
             const impactSeed = Math.random();
 
             state.polygons.forEach(target => {
-                // 💎 彻底移除距离门槛，确保全屏响应
                 let [pLeft, pRest] = sliceByPolyline(target.points, pathL);
-                
                 if (pRest.length > 2) {
                     let [pMid, pRight] = sliceByPolyline(pRest, pathR);
                     if (pMid.length > 2) {
-                        // 💎 增加 Jitter 抖动，修复坍塌
                         nextPolys.push(...shatter(pMid, mx, my, impactSeed));
                     }
                     if (pLeft.length > 2) nextPolys.push(new Polygon(pLeft, target.type, target.seed));
@@ -222,14 +227,11 @@
                     if (pLeft.length > 2) nextPolys.push(new Polygon(pLeft, target.type, target.seed));
                 }
             });
-
-            // 💎 自动清理：删除极微小碎片并限制总数在 2000 以内
             state.polygons = nextPolys.filter(p => p.getArea() > 0.1).slice(0, 2000);
         });
 
         function shatter(points, mx, my, impactSeed) {
             const res = [];
-            // 💎 每个碎裂组拥有微小的随机偏移中心点，防止拧在一起
             const jX = mx + (Math.random() - 0.5) * 12;
             const jY = my + (Math.random() - 0.5) * 12;
             for (let i = 0; i < points.length; i++) {
