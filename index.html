@@ -2,9 +2,9 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v8.1 - 极致交互版</title>
+    <title>FRACTURE PRO v8.2 - 几何优化防扭曲版</title>
     <style>
-        body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+        body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
         .branding { font-weight: 900; font-size: 14px; color: #fff; margin-right: 10px; letter-spacing: 1px; border-right: 1px solid #444; padding-right: 15px;}
         .control-group { display: flex; align-items: center; gap: 8px; background: #1a1a1a; padding: 5px 10px; border-radius: 4px; border: 1px solid #333; }
@@ -29,7 +29,7 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v8.1</div>
+        <div class="branding">FRACTURE_v8.2</div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="0" max="15" value="2">
@@ -41,7 +41,7 @@
             <span id="valDensity">75</span>
         </div>
         <div class="switch-group">
-            <label>原位闪烁</label>
+            <label>信号闪烁</label>
             <label class="switch">
                 <input type="checkbox" id="ctrlDynamic" checked>
                 <span class="slider"></span>
@@ -62,7 +62,6 @@
             density: 0.75,
             lineWidth: 2,
             isDynamic: true,
-            impactWidth: 160,
             polygons: [] 
         };
 
@@ -100,8 +99,7 @@
                 } else {
                     ctx.fillStyle = '#000'; ctx.fill();
                     if (this.type === 'glitch' && state.lineWidth > 0) {
-                        ctx.save();
-                        ctx.clip();
+                        ctx.save(); ctx.clip();
                         this.drawGlitchLines();
                         this.drawInnerGradient();
                         ctx.restore();
@@ -109,7 +107,7 @@
                 }
 
                 if (this.type !== 'base') {
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
                     ctx.lineWidth = 0.5;
                     ctx.stroke();
                 }
@@ -121,7 +119,7 @@
                 cx /= this.points.length; cy /= this.points.length;
                 const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 60);
                 grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-                grad.addColorStop(1, 'rgba(255, 255, 255, 0.25)');
+                grad.addColorStop(1, 'rgba(255, 255, 255, 0.2)');
                 ctx.fillStyle = grad; ctx.fill();
             }
 
@@ -151,7 +149,6 @@
             }
         }
 
-        // 修改：增加随机锚点抖动，提升不规则感
         function generatePolyline(xBase, my, angleDeg) {
             const path = [];
             const segments = 4; 
@@ -159,7 +156,7 @@
             const tanA = Math.tan(angleDeg * Math.PI / 180);
             for (let i = 0; i <= segments; i++) {
                 const y = (h / segments) * i;
-                const x = xBase + (y - my) * tanA + (Math.random() - 0.5) * 20;
+                const x = xBase + (y - my) * tanA + (Math.random() - 0.5) * 15;
                 path.push([x, y]);
             }
             return path;
@@ -183,7 +180,7 @@
                 if (s1 < 0) left.push(p1); else right.push(p1);
                 if ((s1 < 0 && s2 >= 0) || (s1 >= 0 && s2 < 0)) {
                     let d = Math.abs(s1) + Math.abs(s2);
-                    let t = d < 0.0001 ? 0.5 : Math.abs(s1) / d;
+                    let t = d < 0.001 ? 0.5 : Math.abs(s1) / d;
                     let iy = p1[1] + (p2[1] - p1[1]) * t;
                     let ix = getXAtY(iy);
                     left.push([ix, iy]); right.push([ix, iy]);
@@ -201,46 +198,47 @@
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-            // 1. 冲击带参数
-            const angL = (Math.random() - 0.5) * 30; // 扩大到 -15~15
+            const angL = (Math.random() - 0.5) * 30;
             const angR = (Math.random() - 0.5) * 30;
             const xL = mx - (40 + Math.random() * 40);
             const xR = mx + (40 + Math.random() * 40);
             const pathL = generatePolyline(xL, my, angL);
             const pathR = generatePolyline(xR, my, angR);
 
-            let nextPolygons = [];
+            let nextPolys = [];
             const impactSeed = Math.random();
 
-            // 2. 💎 修正：全局强制扫描所有多边形
             state.polygons.forEach(target => {
-                // 如果多边形完全不在冲击范围内，直接跳过计算（性能优化）
                 let minX = 2000, maxX = 0;
                 target.points.forEach(p => { if(p[0]<minX) minX=p[0]; if(p[0]>maxX) maxX=p[0]; });
-                if (maxX < xL - 100 || minX > xR + 100) {
-                    nextPolygons.push(target);
-                    return;
-                }
+                // 简单的范围剔除
+                if (maxX < xL - 150 || minX > xR + 150) { nextPolys.push(target); return; }
 
-                // 进行切割
                 let [pLeft, pRest] = sliceByPolyline(target.points, pathL);
                 if (pRest.length > 2) {
                     let [pMid, pRight] = sliceByPolyline(pRest, pathR);
                     if (pMid.length > 2) {
-                        // 冲击带中间的部分：再次碎裂
-                        const fragments = shatter(pMid, mx, my, impactSeed);
-                        nextPolygons.push(...fragments);
+                        // 💎 核心修改：如果是已经很碎的小块（面积 < 100），只切开，不执行向心 Shatter
+                        // 这能有效防止顶点“拧在一起”
+                        if (target.getArea() < 100) {
+                            nextPolygonsPushSimple(nextPolys, pMid, target.type, impactSeed);
+                        } else {
+                            nextPolys.push(...shatter(pMid, mx, my, impactSeed));
+                        }
                     }
-                    if (pLeft.length > 2) nextPolygons.push(new Polygon(pLeft, target.type, target.seed));
-                    if (pRight.length > 2) nextPolygons.push(new Polygon(pRight, target.type, target.seed));
+                    if (pLeft.length > 2) nextPolys.push(new Polygon(pLeft, target.type, target.seed));
+                    if (pRight.length > 2) nextPolygonsPushSimple(nextPolys, pRight, target.type, target.seed);
                 } else {
-                    if (pLeft.length > 2) nextPolygons.push(new Polygon(pLeft, target.type, target.seed));
+                    if (pLeft.length > 2) nextPolys.push(new Polygon(pLeft, target.type, target.seed));
                 }
             });
 
-            // 💎 修正：如果碎片太多，自动剔除面积极小的碎屑以保证后续还能点得动
-            state.polygons = nextPolygons.filter(p => p.getArea() > 0.5).slice(0, 1000);
+            state.polygons = nextPolys.filter(p => p.getArea() > 0.3).slice(0, 1200);
         });
+
+        function nextPolygonsPushSimple(arr, points, type, seed) {
+            arr.push(new Polygon(points, type === 'base' ? 'glitch' : type, seed));
+        }
 
         function shatter(points, mx, my, impactSeed) {
             const res = [];
@@ -249,12 +247,17 @@
                 const r = 0.3 + Math.random() * 0.4;
                 const mid = [p1[0] + (p2[0]-p1[0])*r, p1[1] + (p2[1]-p1[1])*r];
 
+                // 💎 核心修改：给撞击中心点增加随机扰动 (Impact Jitter)
+                // 这样所有的线就不会死锁在同一个像素点上
+                const jitterX = mx + (Math.random() - 0.5) * 15;
+                const jitterY = my + (Math.random() - 0.5) * 15;
+
                 const type1 = Math.random() < 0.7 ? 'glitch' : 'black';
                 const type2 = Math.random() < 0.4 ? 'glitch' : 'black';
-                const getSeed = (s) => Math.random() < 0.5 ? impactSeed : Math.random();
+                const getSeed = () => Math.random() < 0.5 ? impactSeed : Math.random();
                 
-                res.push(new Polygon([p1, mid, [mx, my]], type1, getSeed()));
-                res.push(new Polygon([mid, p2, [mx, my]], type2, getSeed()));
+                res.push(new Polygon([p1, mid, [jitterX, jitterY]], type1, getSeed()));
+                res.push(new Polygon([mid, p2, [jitterX, jitterY]], type2, getSeed()));
             }
             return res;
         }
