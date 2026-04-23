@@ -77,11 +77,11 @@
             lineWidth: 1,
             isDynamic: true,
             isDoubleStrike: false, 
-            isCracksEnabled: true, // 🎯 装饰性裂纹开关状态
+            isCracksEnabled: true, 
             impactWidth: 160,
             screenGlitch: 0, 
             polygons: [],
-            cracks: [] // 🎯 独立存储裂纹的数组
+            cracks: [] 
         };
 
         document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
@@ -91,19 +91,49 @@
         document.getElementById('ctrlDoubleStrike').onchange = e => { state.isDoubleStrike = e.target.checked; }; 
         document.getElementById('btnClear').onclick = init;
 
-        // 🎯 新增：独立的中心裂纹视觉层
+        // 💎 新版：高度还原真实屏幕碎裂的硬朗射线与背光漏光
         class CrackNode {
             constructor(cx, cy) {
                 this.cx = cx;
                 this.cy = cy;
-                this.lines = [];
-                // 随机生成 4 到 8 条向外辐射的裂纹
-                const numLines = 4 + Math.floor(Math.random() * 5); 
-                for(let i = 0; i < numLines; i++) {
-                    const angle = Math.random() * Math.PI * 2;
-                    // 长度限制在画布高度的 20% 到 50% 之间
-                    const length = (canvas.height * 0.2) + Math.random() * (canvas.height * 0.3); 
-                    this.lines.push({ angle, length });
+                this.rays = [];
+                this.webLines = []; // 蜘蛛网状的次级连接线
+
+                // 1. 生成放射状主裂纹 (15到25条射线)
+                const numRays = 15 + Math.floor(Math.random() * 10);
+                for(let i=0; i<numRays; i++) {
+                    const angle = (i / numRays) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
+                    // 屏幕裂纹通常可以延伸得很长
+                    const length = (canvas.height * 0.5) + Math.random() * 500; 
+                    
+                    let currentX = 0, currentY = 0;
+                    let segments = [];
+                    // 将长射线分成几段，产生轻微的不规则折线感
+                    let segCount = 4 + Math.floor(Math.random() * 4);
+                    let rayAngle = angle;
+                    
+                    for(let j=0; j<segCount; j++) {
+                        let r = length / segCount;
+                        rayAngle += (Math.random() - 0.5) * 0.15; // 每次延伸偏转极小角度
+                        let nextX = currentX + Math.cos(rayAngle) * r;
+                        let nextY = currentY + Math.sin(rayAngle) * r;
+                        segments.push({x1: currentX, y1: currentY, x2: nextX, y2: nextY});
+                        
+                        // 随机在段与段之间生成横向的次级“蛛网”连接线
+                        if (j > 0 && Math.random() > 0.6) {
+                            const webAngle = rayAngle + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2) + (Math.random()-0.5)*0.2;
+                            const webLen = 10 + Math.random() * 30;
+                            this.webLines.push({
+                                x1: currentX, y1: currentY, 
+                                x2: currentX + Math.cos(webAngle)*webLen, 
+                                y2: currentY + Math.sin(webAngle)*webLen
+                            });
+                        }
+                        
+                        currentX = nextX;
+                        currentY = nextY;
+                    }
+                    this.rays.push(segments);
                 }
             }
 
@@ -111,44 +141,59 @@
                 ctx.save();
                 ctx.translate(this.cx, this.cy);
                 
-                // 处理闪烁逻辑
+                // 动态故障闪烁
                 if (state.isDynamic) {
                     const flicker = Math.random();
-                    if (flicker < 0.1) ctx.globalAlpha = 0.2;
-                    else if (flicker < 0.3) ctx.globalAlpha = 0.5;
+                    if (flicker < 0.05) ctx.globalAlpha = 0.3;
+                    else if (flicker < 0.15) ctx.globalAlpha = 0.7;
                     else ctx.globalAlpha = 1.0;
                 }
 
+                // 1. 绘制核心泄露背光 (白亮渐变圈)
+                const blastRadius = 30 + Math.random() * 20;
+                const blastGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, blastRadius);
+                blastGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+                blastGradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.9)');
+                blastGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                
+                ctx.fillStyle = blastGradient;
                 ctx.beginPath();
-                this.lines.forEach(l => {
-                    ctx.moveTo(0, 0);
-                    let currX = 0, currY = 0;
-                    const segments = 3; // 将一条裂纹分成3段产生折线感
-                    
-                    for(let j = 1; j <= segments; j++) {
-                        let r = (l.length / segments) * j;
-                        // 每段随机偏移一个小角度产生不规则锯齿
-                        let a = l.angle + (Math.random() - 0.5) * 0.6; 
-                        currX = Math.cos(a) * r;
-                        currY = Math.sin(a) * r;
-                        ctx.lineTo(currX, currY);
-                    }
-                });
+                ctx.arc(0, 0, blastRadius, 0, Math.PI * 2);
+                ctx.fill();
 
-                // 绘制基础白色高光裂痕
-                ctx.strokeStyle = '#ffffff';
+                // 2. 绘制放射裂纹与蛛网线
+                ctx.beginPath();
+                this.rays.forEach(segments => {
+                    segments.forEach(seg => {
+                        ctx.moveTo(seg.x1, seg.y1);
+                        ctx.lineTo(seg.x2, seg.y2);
+                    });
+                });
+                this.webLines.forEach(web => {
+                    ctx.moveTo(web.x1, web.y1);
+                    ctx.lineTo(web.x2, web.y2);
+                });
+                
+                // 设置白色硬朗线条，加入一点点辉光
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
                 ctx.lineWidth = 1;
+                ctx.shadowBlur = 4;
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
                 ctx.stroke();
+                
+                // 清除阴影防止影响其他渲染
+                ctx.shadowBlur = 0;
 
-                // 叠加一层微弱的故障色光晕
+                // 3. 根部细微色散光晕 (模拟液晶漏液的光学折射)
                 ctx.beginPath();
-                this.lines.forEach(l => {
-                    ctx.moveTo(0, 0);
-                    ctx.lineTo(Math.cos(l.angle) * l.length, Math.sin(l.angle) * l.length);
+                this.rays.forEach(segments => {
+                     let firstSeg = segments[0];
+                     ctx.moveTo(firstSeg.x1, firstSeg.y1);
+                     ctx.lineTo(firstSeg.x2, firstSeg.y2);
                 });
-                ctx.strokeStyle = Math.random() > 0.5 ? '#74ff06' : '#ff009e';
-                ctx.globalAlpha = ctx.globalAlpha * 0.4;
-                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = Math.random() > 0.5 ? 'rgba(0, 255, 255, 0.5)' : 'rgba(255, 0, 255, 0.5)';
+                ctx.lineWidth = 2;
+                ctx.globalCompositeOperation = 'screen';
                 ctx.stroke();
 
                 ctx.restore();
@@ -302,14 +347,12 @@
 
         function init() {
             state.polygons = [new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]], 'base', null)];
-            state.cracks = []; // 重启时清空裂纹
+            state.cracks = []; 
         }
 
         function triggerImpact(cx, cy) {
-            // 🎯 生成中心装饰性裂纹
             if (state.isCracksEnabled) {
                 state.cracks.push(new CrackNode(cx, cy));
-                // 防止内存溢出，最多保留150个裂纹节点
                 if (state.cracks.length > 150) state.cracks.shift(); 
             }
 
@@ -398,10 +441,9 @@
                 ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
             }
             
-            // 1. 渲染基础切割多边形
             state.polygons.forEach(p => p.draw());
             
-            // 2. 🎯 叠加渲染装饰性裂纹层
+            // 渲染硬朗的物理屏幕裂纹层
             state.cracks.forEach(c => c.draw());
 
             if (state.screenGlitch > 0) {
