@@ -63,7 +63,7 @@
             lineWidth: 2,
             isDynamic: true,
             impactWidth: 160,
-            screenGlitch: 0, // ⚡ 新增：全局震动与闪烁帧数计时器
+            screenGlitch: 0, 
             polygons: [] 
         };
 
@@ -201,7 +201,6 @@
         canvas.addEventListener('mousedown', (e) => {
             if (e.button === 2) return;
 
-            // ⚡ 触发左键全局碎裂闪烁震动（8帧衰减）
             state.screenGlitch = 8; 
 
             const rect = canvas.getBoundingClientRect();
@@ -277,45 +276,47 @@
         }
 
         function render() {
-            // 清除整个画布，不受 transform 影响
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.save(); // 保存未偏移的上下文状态
+            ctx.save(); 
 
-            // ⚡ 屏幕震动与故障后处理 (Post-Processing)
+            // 1. 坐标偏移（相机震动）
             if (state.screenGlitch > 0) {
                 state.screenGlitch--;
-                
-                // 1. 坐标偏移（相机震动）强度随帧数衰减
                 const shake = state.screenGlitch * 1.5; 
                 ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
-
-                // 2. 色彩反转与色相偏移（高强度故障感）
-                if (Math.random() > 0.5) {
-                    ctx.filter = `invert(80%) hue-rotate(${Math.random() * 180}deg)`;
-                } else if (Math.random() > 0.7) {
-                    ctx.filter = `contrast(200%) saturate(300%)`;
-                }
             }
 
             // 正常绘制所有多边形
             state.polygons.forEach(p => p.draw());
 
-            // 3. 画面横向物理撕裂 (Screen Tearing)
-            // 在绘制完成后，随机截取一段画布重新错位画上去
+            // 2. 高性能色彩重置 
+            if (state.screenGlitch > 0) {
+                if (Math.random() > 0.5) {
+                    ctx.globalCompositeOperation = 'difference';
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; 
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.globalCompositeOperation = 'source-over'; 
+                } else if (Math.random() > 0.7) {
+                    ctx.fillStyle = 'rgba(255, 0, 158, 0.15)'; 
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+            }
+
+            ctx.restore(); 
+
+            // 3. 画面横向物理撕裂
             if (state.screenGlitch > 0 && Math.random() > 0.3) {
                 const sliceY = Math.random() * canvas.height;
-                const sliceH = Math.random() * 20 + 5;
+                const sliceH = Math.random() * 8 + 2; 
                 const offset = (Math.random() - 0.5) * 40;
                 
                 ctx.drawImage(
                     canvas, 
-                    0, sliceY, canvas.width, sliceH, // 源区域
-                    offset, sliceY, canvas.width, sliceH // 目标错位区域
+                    0, sliceY, canvas.width, sliceH, 
+                    offset, sliceY, canvas.width, sliceH 
                 );
             }
 
-            ctx.restore(); // 恢复正常无滤镜状态，供下一帧使用
             requestAnimationFrame(render);
         }
 
