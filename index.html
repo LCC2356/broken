@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v7.3 - 深度控制版</title>
+    <title>FRACTURE PRO v7.4 - 边缘光泽深度版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -29,7 +29,7 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v7.3</div>
+        <div class="branding">FRACTURE_v7.4</div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="0" max="15" value="2">
@@ -57,15 +57,17 @@
     <script>
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d');
+        const EPSILON = 0.01;
         
         let state = {
             density: 0.7,
             lineWidth: 2,
             isDynamic: true,
-            maxDepth: 3, // 💎 细分层级限制为 3
+            maxDepth: 3, 
             polygons: [] 
         };
 
+        // UI 绑定
         document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
         document.getElementById('ctrlLineWidth').oninput = e => { state.lineWidth = parseInt(e.target.value); document.getElementById('valLineWidth').innerText = e.target.value; };
         document.getElementById('ctrlDynamic').onchange = e => { state.isDynamic = e.target.checked; };
@@ -76,7 +78,7 @@
                 this.points = points; 
                 this.type = type; 
                 this.seed = seed !== null ? seed : Math.random();
-                this.depth = depth; // 💎 记录当前细分深度
+                this.depth = depth; 
             }
 
             getArea() {
@@ -91,29 +93,78 @@
             draw() {
                 if (this.points.length < 3) return;
                 ctx.save();
+                
+                // 1. 定义多边形路径，用于填充和裁剪
                 ctx.beginPath();
                 ctx.moveTo(this.points[0][0], this.points[0][1]);
                 for (let i = 1; i < this.points.length; i++) ctx.lineTo(this.points[i][0], this.points[i][1]);
                 ctx.closePath();
 
+                // --- LAYER 1: 底色与故障线 ---
                 if (this.type === 'base') {
-                    ctx.fillStyle = '#74ff06';
-                    ctx.fill();
+                    ctx.fillStyle = '#74ff06'; ctx.fill();
                 } else {
-                    ctx.fillStyle = '#000';
-                    ctx.fill();
+                    ctx.fillStyle = '#000'; ctx.fill();
                     if (this.type === 'glitch' && state.lineWidth > 0) {
+                        ctx.save(); // 为 Glitch 闪烁区域创建独立的 clip
                         ctx.clip();
                         this.drawGlitchLines();
+                        ctx.restore();
                     }
                 }
+                ctx.restore(); // 还原底色与故障线层
 
+                // --- LAYER 2: 💎 边缘向内的白色渐变 (Inner Shadow 技巧) ---
+                ctx.save();
+                // 同样定义路径并裁剪，确保渐变只出现在碎片内部
+                ctx.beginPath();
+                ctx.moveTo(this.points[0][0], this.points[0][1]);
+                for (let i = 1; i < this.points.length; i++) ctx.lineTo(this.points[i][0], this.points[i][1]);
+                ctx.closePath();
+                ctx.clip();
+
+                // 设置阴影属性：白色，30% 不透明度
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.3)';
+                // 模糊值定义渐变的深度，在100px画板上，20px显得边缘厚重
+                ctx.shadowBlur = 20; 
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+
+                // 核心：绘制反转路径。填充外部区域，让阴影向内投射。
+                // 1. 先绕 Canvas 边界画一个逆时针的大矩形框
+                ctx.beginPath();
+                ctx.moveTo(-100, -100);
+                ctx.lineTo(-100, canvas.height + 100);
+                ctx.lineTo(canvas.width + 100, canvas.height + 100);
+                ctx.lineTo(canvas.width + 100, -100);
+                ctx.closePath();
+
+                // 2. 然后绕多边形点顺时针画一个洞（利用 non-zero winding rule 实现 XOR 效果）
+                // 假设 points 是逆时针的，反向 loop 就能得到顺时针路径
+                ctx.moveTo(this.points[0][0], this.points[0][1]);
+                for (let i = this.points.length - 1; i >= 0; i--) {
+                    ctx.lineTo(this.points[i][0], this.points[i][1]);
+                }
+                ctx.closePath();
+
+                // 填充反转后的 shape（颜色不重要，因为它在碎片外部，被 clipped 掉了，只留下了向内的阴影）
+                ctx.fillStyle = "black";
+                ctx.fill();
+
+                ctx.restore(); // 还原渐变层
+
+                // --- LAYER 3: 物理裂缝线 (原有的细圈边) ---
                 if (this.type !== 'base') {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(this.points[0][0], this.points[0][1]);
+                    for (let i = 1; i < this.points.length; i++) ctx.lineTo(this.points[i][0], this.points[i][1]);
+                    ctx.closePath();
                     ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
                     ctx.lineWidth = 0.5;
                     ctx.stroke();
+                    ctx.restore();
                 }
-                ctx.restore();
             }
 
             drawGlitchLines() {
@@ -121,6 +172,7 @@
                 this.points.forEach(p => { if(p[0] < minX) minX = p[0]; if(p[0] > maxX) maxX = p[0]; });
                 const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
                 const w = Math.max(1, state.lineWidth);
+                let prng = this.getPseudoRandom(this.seed);
                 for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
                     const noise = this.absRandom(x, this.seed);
                     if (noise < state.density) {
@@ -139,6 +191,15 @@
             absRandom(x, s) {
                 let val = Math.sin(x * 12.9898 + s * 78.233) * 43758.5453;
                 return val - Math.floor(val);
+            }
+            getPseudoRandom(s) {
+                let m_w = (123456789 + s * 10000) & 0xffffffff;
+                let m_z = (987654321 - s * 10000) & 0xffffffff;
+                return () => {
+                    m_z = (36969 * (m_z & 65535) + (m_z >> 16)) & 0xffffffff;
+                    m_w = (18000 * (m_w & 65535) + (m_w >> 16)) & 0xffffffff;
+                    return (((m_z << 16) + m_w) & 0xffffffff) / 4294967296 + 0.5;
+                }
             }
         }
 
@@ -199,6 +260,8 @@
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
+            if (state.polygons.length > 600) return;
+
             const angL = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 15);
             const angR = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 15);
             const xL = mx - (30 + Math.random() * 50);
@@ -209,7 +272,6 @@
 
             for (let i = state.polygons.length - 1; i >= 0; i--) {
                 const target = state.polygons[i];
-                // 💎 如果深度已达上限，不再切分
                 if (target.depth >= state.maxDepth) continue;
                 
                 if (isPointInPoly([mx, my], target.points)) {
@@ -219,7 +281,6 @@
                         if (centerQuad.length > 2) {
                             shatter(centerQuad, mx, my, target.seed, target.depth + 1);
                             state.polygons.splice(i, 1);
-                            // 💎 50% 几率继承种子（贯穿），50% 几率产生新种子（断裂）
                             const getSeed = (s) => Math.random() < 0.5 ? s : Math.random();
                             state.polygons.push(new Polygon(p1, target.type, getSeed(target.seed), target.depth + 1));
                             state.polygons.push(new Polygon(p2, target.type, getSeed(target.seed), target.depth + 1));
@@ -232,11 +293,12 @@
 
         function shatter(points, mx, my, parentSeed, nextDepth, index = -1) {
             const newPolys = [];
+            if (new Polygon(points).getArea() < 5) return;
+
             for (let i = 0; i < points.length; i++) {
                 const p1 = points[i], p2 = points[(i + 1) % points.length];
                 const r = 0.3 + Math.random() * 0.4;
                 const mid = [p1[0] + (p2[0]-p1[0])*r, p1[1] + (p2[1]-p1[1])*r];
-                // 💎 同样在此应用 50% 贯穿几率判定
                 const getSeed = (s) => Math.random() < 0.5 ? s : Math.random();
                 newPolys.push(new Polygon([p1, mid, [mx, my]], Math.random() < 0.6 ? 'glitch' : 'black', getSeed(parentSeed), nextDepth));
                 newPolys.push(new Polygon([mid, p2, [mx, my]], Math.random() < 0.3 ? 'glitch' : 'black', getSeed(parentSeed), nextDepth));
