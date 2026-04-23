@@ -63,6 +63,7 @@
             lineWidth: 2,
             isDynamic: true,
             impactWidth: 160,
+            screenGlitch: 0, // ⚡ 新增：全局震动与闪烁帧数计时器
             polygons: [] 
         };
 
@@ -98,7 +99,6 @@
                 if (this.type === 'base') {
                     ctx.fillStyle = '#74ff06'; ctx.fill();
                 } else if (this.type === 'pink') {
-                    // 🌈 新增：支持品红色正方形的渲染
                     ctx.fillStyle = '#ff009e'; ctx.fill();
                 } else {
                     ctx.fillStyle = '#000'; ctx.fill();
@@ -199,8 +199,10 @@
         }
 
         canvas.addEventListener('mousedown', (e) => {
-            // 防止右键点击触发左键碎裂逻辑
             if (e.button === 2) return;
+
+            // ⚡ 触发左键全局碎裂闪烁震动（8帧衰减）
+            state.screenGlitch = 8; 
 
             const rect = canvas.getBoundingClientRect();
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
@@ -241,13 +243,10 @@
             state.polygons = nextPolygons.filter(p => p.getArea() > 0.5).slice(0, 1000);
         });
 
-        // 🎯 新增：右键生成品红色正方形
         canvas.addEventListener('contextmenu', (e) => {
             e.preventDefault(); 
-
             const rect = canvas.getBoundingClientRect();
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
-            
             const h = canvas.height;
             const half = h / 2;
 
@@ -257,7 +256,6 @@
                 [mx + half, h],       
                 [mx - half, h]        
             ];
-
             state.polygons.push(new Polygon(squarePoints, 'pink', null));
         });
 
@@ -279,8 +277,45 @@
         }
 
         function render() {
+            // 清除整个画布，不受 transform 影响
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.save(); // 保存未偏移的上下文状态
+
+            // ⚡ 屏幕震动与故障后处理 (Post-Processing)
+            if (state.screenGlitch > 0) {
+                state.screenGlitch--;
+                
+                // 1. 坐标偏移（相机震动）强度随帧数衰减
+                const shake = state.screenGlitch * 1.5; 
+                ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+
+                // 2. 色彩反转与色相偏移（高强度故障感）
+                if (Math.random() > 0.5) {
+                    ctx.filter = `invert(80%) hue-rotate(${Math.random() * 180}deg)`;
+                } else if (Math.random() > 0.7) {
+                    ctx.filter = `contrast(200%) saturate(300%)`;
+                }
+            }
+
+            // 正常绘制所有多边形
             state.polygons.forEach(p => p.draw());
+
+            // 3. 画面横向物理撕裂 (Screen Tearing)
+            // 在绘制完成后，随机截取一段画布重新错位画上去
+            if (state.screenGlitch > 0 && Math.random() > 0.3) {
+                const sliceY = Math.random() * canvas.height;
+                const sliceH = Math.random() * 20 + 5;
+                const offset = (Math.random() - 0.5) * 40;
+                
+                ctx.drawImage(
+                    canvas, 
+                    0, sliceY, canvas.width, sliceH, // 源区域
+                    offset, sliceY, canvas.width, sliceH // 目标错位区域
+                );
+            }
+
+            ctx.restore(); // 恢复正常无滤镜状态，供下一帧使用
             requestAnimationFrame(render);
         }
 
