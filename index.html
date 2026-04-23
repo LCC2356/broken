@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v7.5 - 稳定光泽修复版</title>
+    <title>FRACTURE PRO v7.6 - 深度叠加稳定版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -29,7 +29,7 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v7.5</div>
+        <div class="branding">FRACTURE_v7.6</div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="0" max="15" value="2">
@@ -83,7 +83,6 @@
                 if (this.points.length < 3) return;
                 ctx.save();
                 
-                // 定义多边形路径
                 ctx.beginPath();
                 ctx.moveTo(this.points[0][0], this.points[0][1]);
                 for (let i = 1; i < this.points.length; i++) ctx.lineTo(this.points[i][0], this.points[i][1]);
@@ -100,15 +99,12 @@
                         ctx.save();
                         ctx.clip();
                         this.drawGlitchLines();
+                        // 💎 核心修改：仅 glitch 类型拥有渐变
+                        this.drawInnerGradient();
                         ctx.restore();
                     }
-
-                    // 💎 核心修改：内向白色渐变 (30% 透明度)
-                    // 仅在被破坏的碎片上渲染
-                    this.drawInnerGradient();
                 }
 
-                // 物理裂缝白圈
                 if (this.type !== 'base') {
                     ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
                     ctx.lineWidth = 0.5;
@@ -118,22 +114,17 @@
             }
 
             drawInnerGradient() {
-                // 计算重心作为渐变中心
                 let cx = 0, cy = 0;
                 this.points.forEach(p => { cx += p[0]; cy += p[1]; });
                 cx /= this.points.length;
                 cy /= this.points.length;
 
-                // 渐变半径取碎片宽度的平均值
-                const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 60);
-                grad.addColorStop(0, 'rgba(255, 255, 255, 0)');   // 中心透明
-                grad.addColorStop(1, 'rgba(255, 255, 255, 0.3)'); // 边缘 30% 白
+                const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 70);
+                grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+                grad.addColorStop(1, 'rgba(255, 255, 255, 0.25)');
 
-                ctx.save();
-                ctx.clip(); // 限制在多边形内部
                 ctx.fillStyle = grad;
                 ctx.fill();
-                ctx.restore();
             }
 
             drawGlitchLines() {
@@ -229,20 +220,25 @@
 
             for (let i = state.polygons.length - 1; i >= 0; i--) {
                 const target = state.polygons[i];
-                if (target.depth >= state.maxDepth) continue;
                 
                 if (isPointInPoly([mx, my], target.points)) {
+                    // 💎 核心修改：如果已达最大深度，重置该块深度，使其作为“新大碎片”被切分
+                    let currentDepth = target.depth;
+                    if (currentDepth >= state.maxDepth) {
+                        currentDepth = 0; 
+                    }
+
                     let [p1, pRest] = sliceByPolyline(target.points, pathL);
                     if (p1.length > 2 && pRest.length > 2) {
                         let [centerQuad, p2] = sliceByPolyline(pRest, pathR);
                         if (centerQuad.length > 2) {
-                            shatter(centerQuad, mx, my, target.seed, target.depth + 1);
+                            shatter(centerQuad, mx, my, target.seed, currentDepth + 1);
                             state.polygons.splice(i, 1);
                             const getSeed = (s) => Math.random() < 0.5 ? s : Math.random();
-                            state.polygons.push(new Polygon(p1, target.type, getSeed(target.seed), target.depth + 1));
-                            state.polygons.push(new Polygon(p2, target.type, getSeed(target.seed), target.depth + 1));
-                        } else shatter(target.points, mx, my, target.seed, target.depth + 1, i);
-                    } else shatter(target.points, mx, my, target.seed, target.depth + 1, i);
+                            state.polygons.push(new Polygon(p1, target.type, getSeed(target.seed), currentDepth + 1));
+                            state.polygons.push(new Polygon(p2, target.type, getSeed(target.seed), currentDepth + 1));
+                        } else shatter(target.points, mx, my, target.seed, currentDepth + 1, i);
+                    } else shatter(target.points, mx, my, target.seed, currentDepth + 1, i);
                     break;
                 }
             }
