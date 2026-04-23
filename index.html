@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v7.2 - 信号贯穿版</title>
+    <title>FRACTURE PRO v7.3 - 深度控制版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -29,7 +29,7 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v7.2</div>
+        <div class="branding">FRACTURE_v7.3</div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="0" max="15" value="2">
@@ -41,7 +41,7 @@
             <span id="valDensity">70</span>
         </div>
         <div class="switch-group">
-            <label>贯穿闪烁</label>
+            <label>原位闪烁</label>
             <label class="switch">
                 <input type="checkbox" id="ctrlDynamic" checked>
                 <span class="slider"></span>
@@ -57,12 +57,12 @@
     <script>
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d');
-        const EPSILON = 0.01;
         
         let state = {
             density: 0.7,
             lineWidth: 2,
             isDynamic: true,
+            maxDepth: 3, // 💎 细分层级限制为 3
             polygons: [] 
         };
 
@@ -72,11 +72,11 @@
         document.getElementById('btnClear').onclick = init;
 
         class Polygon {
-            constructor(points, type = 'base', seed = null) {
+            constructor(points, type = 'base', seed = null, depth = 0) {
                 this.points = points; 
                 this.type = type; 
-                // 💎 核心修改：如果传入了父级种子则使用，否则新建
                 this.seed = seed !== null ? seed : Math.random();
+                this.depth = depth; // 💎 记录当前细分深度
             }
 
             getArea() {
@@ -109,7 +109,7 @@
                 }
 
                 if (this.type !== 'base') {
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
                     ctx.lineWidth = 0.5;
                     ctx.stroke();
                 }
@@ -119,14 +119,10 @@
             drawGlitchLines() {
                 let minX = 2000, maxX = 0;
                 this.points.forEach(p => { if(p[0] < minX) minX = p[0]; if(p[0] > maxX) maxX = p[0]; });
-                
                 const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
                 const w = Math.max(1, state.lineWidth);
-                
                 for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
-                    // 💎 核心修改：使用绝对坐标 X + 种子作为随机基准，实现多块贯穿
                     const noise = this.absRandom(x, this.seed);
-                    
                     if (noise < state.density) {
                         if (state.isDynamic) {
                             const flicker = Math.random();
@@ -140,7 +136,6 @@
                 }
             }
 
-            // 基于绝对坐标的伪随机，确保相邻块对齐
             absRandom(x, s) {
                 let val = Math.sin(x * 12.9898 + s * 78.233) * 43758.5453;
                 return val - Math.floor(val);
@@ -188,7 +183,7 @@
         }
 
         function init() {
-            state.polygons = [new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]], 'base')];
+            state.polygons = [new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]], 'base', null, 0)];
         }
 
         function isPointInPoly(pt, poly) {
@@ -204,8 +199,6 @@
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-            if (state.polygons.length > 600) return;
-
             const angL = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 15);
             const angR = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 15);
             const xL = mx - (30 + Math.random() * 50);
@@ -216,36 +209,37 @@
 
             for (let i = state.polygons.length - 1; i >= 0; i--) {
                 const target = state.polygons[i];
-                if (target.getArea() < 10) continue;
+                // 💎 如果深度已达上限，不再切分
+                if (target.depth >= state.maxDepth) continue;
                 
                 if (isPointInPoly([mx, my], target.points)) {
                     let [p1, pRest] = sliceByPolyline(target.points, pathL);
                     if (p1.length > 2 && pRest.length > 2) {
                         let [centerQuad, p2] = sliceByPolyline(pRest, pathR);
                         if (centerQuad.length > 2) {
-                            // 💎 核心修改：将父级 seed 传给 shatter 产生的子碎片
-                            shatter(centerQuad, mx, my, target.seed);
+                            shatter(centerQuad, mx, my, target.seed, target.depth + 1);
                             state.polygons.splice(i, 1);
-                            if (p1.length > 2) state.polygons.push(new Polygon(p1, target.type, target.seed));
-                            if (p2.length > 2) state.polygons.push(new Polygon(p2, target.type, target.seed));
-                        } else shatter(target.points, mx, my, target.seed, i);
-                    } else shatter(target.points, mx, my, target.seed, i);
+                            // 💎 50% 几率继承种子（贯穿），50% 几率产生新种子（断裂）
+                            const getSeed = (s) => Math.random() < 0.5 ? s : Math.random();
+                            state.polygons.push(new Polygon(p1, target.type, getSeed(target.seed), target.depth + 1));
+                            state.polygons.push(new Polygon(p2, target.type, getSeed(target.seed), target.depth + 1));
+                        } else shatter(target.points, mx, my, target.seed, target.depth + 1, i);
+                    } else shatter(target.points, mx, my, target.seed, target.depth + 1, i);
                     break;
                 }
             }
         });
 
-        function shatter(points, mx, my, parentSeed, index = -1) {
+        function shatter(points, mx, my, parentSeed, nextDepth, index = -1) {
             const newPolys = [];
-            if (new Polygon(points).getArea() < 5) return;
-
             for (let i = 0; i < points.length; i++) {
                 const p1 = points[i], p2 = points[(i + 1) % points.length];
                 const r = 0.3 + Math.random() * 0.4;
                 const mid = [p1[0] + (p2[0]-p1[0])*r, p1[1] + (p2[1]-p1[1])*r];
-                // 💎 子碎片继承 parentSeed
-                newPolys.push(new Polygon([p1, mid, [mx, my]], Math.random() < 0.6 ? 'glitch' : 'black', parentSeed));
-                newPolys.push(new Polygon([mid, p2, [mx, my]], Math.random() < 0.3 ? 'glitch' : 'black', parentSeed));
+                // 💎 同样在此应用 50% 贯穿几率判定
+                const getSeed = (s) => Math.random() < 0.5 ? s : Math.random();
+                newPolys.push(new Polygon([p1, mid, [mx, my]], Math.random() < 0.6 ? 'glitch' : 'black', getSeed(parentSeed), nextDepth));
+                newPolys.push(new Polygon([mid, p2, [mx, my]], Math.random() < 0.3 ? 'glitch' : 'black', getSeed(parentSeed), nextDepth));
             }
             if (index !== -1) state.polygons.splice(index, 1, ...newPolys);
             else state.polygons.push(...newPolys);
