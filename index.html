@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v8.3 - 极致交互版</title>
+    <title>FRACTURE PRO v8.4 - 极致交互版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -29,7 +29,7 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v8.3</div>
+        <div class="branding">FRACTURE_v8.4</div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="1" max="150" value="10">
@@ -40,10 +40,21 @@
             <input type="range" id="ctrlDensity" min="1" max="100" value="15">
             <span id="valDensity">15</span>
         </div>
-        <div class="control-group">
-            <label>横向概率%</label>
-            <input type="range" id="ctrlHorizProb" min="0" max="100" value="60">
-            <span id="valHorizProb">60</span>
+        
+        <div class="control-group" style="border-color: #0044FF;">
+            <label>横线比例%</label>
+            <input type="range" id="ctrlHorizProb" min="0" max="100" value="10">
+            <span id="valHorizProb">10</span>
+        </div>
+        <div class="control-group" style="border-color: #0044FF;">
+            <label>竖线贯穿%</label>
+            <input type="range" id="ctrlPierceV" min="0" max="100" value="90">
+            <span id="valPierceV">90</span>
+        </div>
+        <div class="control-group" style="border-color: #0044FF;">
+            <label>横线贯穿%</label>
+            <input type="range" id="ctrlPierceH" min="0" max="100" value="10">
+            <span id="valPierceH">10</span>
         </div>
         
         <div class="control-group" style="border-color: #ff009e;">
@@ -88,7 +99,9 @@
         let state = {
             density: 0.15, 
             lineWidth: 1.0, 
-            horizProb: 0.60, // 🎯 新增：横向概率状态，默认 60%
+            horizProb: 0.10, // 默认 10% 块是横向，90%是竖向
+            pierceV: 0.90,   // 🎯 竖向线条 90% 贯穿所有碎块
+            pierceH: 0.10,   // 🎯 横向线条 10% 贯穿所有碎块
             isDynamic: true,
             isDoubleStrike: false, 
             isCracksEnabled: true, 
@@ -102,11 +115,10 @@
             blastScale: 0.05       
         };
 
-        // 🎯 绑定新滑块事件
-        document.getElementById('ctrlHorizProb').oninput = e => { 
-            state.horizProb = e.target.value / 100; 
-            document.getElementById('valHorizProb').innerText = e.target.value; 
-        };
+        // 绑定滑块事件
+        document.getElementById('ctrlHorizProb').oninput = e => { state.horizProb = e.target.value / 100; document.getElementById('valHorizProb').innerText = e.target.value; };
+        document.getElementById('ctrlPierceV').oninput = e => { state.pierceV = e.target.value / 100; document.getElementById('valPierceV').innerText = e.target.value; };
+        document.getElementById('ctrlPierceH').oninput = e => { state.pierceH = e.target.value / 100; document.getElementById('valPierceH').innerText = e.target.value; };
 
         document.getElementById('ctrlLineWidth').oninput = e => { const val = e.target.value / 10; state.lineWidth = val; document.getElementById('valLineWidth').innerText = val.toFixed(1); };
         document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
@@ -283,12 +295,17 @@
                 const w = Math.max(0.01, state.lineWidth); 
                 const step = Math.max(1, w); 
                 
-                // 🎯 核心逻辑更新：直接读取界面的概率滑块值
                 const isHorizontal = this.absRandom(this.seed, 99.9) < state.horizProb; 
 
                 if (!isHorizontal) {
+                    // 🎯 竖向线条渲染
                     for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += step) {
-                        const noise = this.absRandom(x, this.seed);
+                        // 决定当前的 x 坐标是否是一条贯穿全屏的主线
+                        const isPiercing = this.absRandom(x, 111.11) < state.pierceV;
+                        // 如果贯穿，使用全局统一的种子(222.22)；如果不贯穿，使用碎块本地自己的种子
+                        const seedToUse = isPiercing ? 222.22 : this.seed;
+                        const noise = this.absRandom(x, seedToUse);
+                        
                         if (noise < state.density) {
                             if (state.isDynamic) {
                                 const flicker = Math.random();
@@ -301,8 +318,13 @@
                         }
                     }
                 } else {
+                    // 🎯 横向线条渲染
                     for (let y = Math.floor(minY); y <= Math.ceil(maxY); y += step) {
-                        const noise = this.absRandom(y, this.seed + 500); 
+                        // 横向贯穿判定
+                        const isPiercing = this.absRandom(y, 333.33) < state.pierceH;
+                        const seedToUse = isPiercing ? 444.44 : this.seed;
+                        const noise = this.absRandom(y, seedToUse + 500); 
+                        
                         if (noise < state.density) {
                             if (state.isDynamic) {
                                 const flicker = Math.random();
