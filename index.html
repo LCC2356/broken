@@ -2,17 +2,17 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO - 深度故障动态版</title>
+    <title>FRACTURE PRO v5.1 - 深度故障几何版</title>
     <style>
-        body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
-        .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #333; z-index: 10; flex-wrap: wrap; }
+        body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+        .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
         .branding { font-weight: 900; font-size: 14px; color: #fff; margin-right: 10px; letter-spacing: 1px; border-right: 1px solid #444; padding-right: 15px;}
-        .control-group { display: flex; align-items: center; gap: 8px; background: #1a1a1a; padding: 5px 10px; border-radius: 4px; border: 1px solid #222; }
+        .control-group { display: flex; align-items: center; gap: 8px; background: #1a1a1a; padding: 5px 10px; border-radius: 4px; border: 1px solid #333; }
         .control-group label { font-size: 10px; color: #888; text-transform: uppercase; }
         .control-group span { font-size: 10px; color: #74ff06; width: 25px; text-align: right; font-family: monospace; }
         input[type="range"] { cursor: pointer; width: 60px; accent-color: #74ff06; }
         
-        /* 开关样式 */
+        /* 动态/静态开关 */
         .switch-group { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #888; text-transform: uppercase; margin-left: 10px;}
         .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
         .switch input { opacity: 0; width: 0; height: 0; }
@@ -21,16 +21,17 @@
         input:checked + .slider { background-color: #74ff06; }
         input:checked + .slider:before { transform: translateX(16px); }
 
-        button { background: #333; border: 1px solid #555; color: #fff; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: bold; }
-        button:hover { border-color: #74ff06; color: #74ff06; }
-        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #050505; padding: 20px; }
-        canvas { background-color: #74ff06; cursor: crosshair; image-rendering: pixelated; }
+        button { background: #333; border: 1px solid #555; color: #fff; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: bold; transition: 0.2s; }
+        button:hover { border-color: #74ff06; background-color: #444; }
+        
+        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #050505; padding: 20px; overflow: auto; }
+        canvas { background-color: #74ff06; cursor: crosshair; image-rendering: pixelated; box-shadow: 0 0 30px rgba(116, 255, 6, 0.1); }
     </style>
 </head>
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v5.0</div>
+        <div class="branding">FRACTURE_PRO v5.1</div>
         
         <div class="control-group">
             <label>线宽</label>
@@ -39,9 +40,9 @@
         </div>
 
         <div class="control-group">
-            <label>疏密度</label>
-            <input type="range" id="ctrlDensity" min="1" max="100" value="75">
-            <span id="valDensity">75</span>
+            <label>密度</label>
+            <input type="range" id="ctrlDensity" min="1" max="100" value="70">
+            <span id="valDensity">70</span>
         </div>
 
         <div class="switch-group">
@@ -52,7 +53,7 @@
             </label>
         </div>
         
-        <button id="btnClear" style="margin-left: auto;">REBOOT</button>
+        <button id="btnClear" style="margin-left: auto;">RESET SYSTEM</button>
     </div>
 
     <div class="workspace">
@@ -64,9 +65,9 @@
         const ctx = canvas.getContext('2d');
         
         let state = {
-            density: 0.75,
+            density: 0.7,
             lineWidth: 2,
-            impactWidth: 220,
+            impactWidth: 220, // 约 1/10 画布宽度
             isDynamic: true,
             polygons: [] 
         };
@@ -80,24 +81,22 @@
         class Polygon {
             constructor(points, type = 'base') {
                 this.points = points; 
-                this.type = type; // 'base' (绿色), 'black' (纯黑), 'glitch' (黑底+线)
-                this.seed = Math.random(); // 静态模式下的随机种子
+                this.type = type; // 'base' (未破坏), 'black' (纯黑), 'glitch' (黑底+线)
+                this.seed = Math.random(); // 静态模式种子
             }
 
             draw() {
                 ctx.save();
                 ctx.beginPath();
                 ctx.moveTo(this.points[0][0], this.points[0][1]);
-                for (let i = 1; i < this.points.length; i++) {
-                    ctx.lineTo(this.points[i][0], this.points[i][1]);
-                }
+                for (let i = 1; i < this.points.length; i++) ctx.lineTo(this.points[i][0], this.points[i][1]);
                 ctx.closePath();
 
                 if (this.type === 'base') {
                     ctx.fillStyle = '#74ff06';
                     ctx.fill();
                 } else {
-                    // 只要是被切开的区域，底色全是黑
+                    // 只要碎裂区域，底色全是黑
                     ctx.fillStyle = '#000';
                     ctx.fill();
                     
@@ -107,15 +106,16 @@
                     }
                 }
 
-                // 只有被切开的部分显示白色的物理裂缝线
+                // 物理裂缝线
                 if (this.type !== 'base') {
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
                     ctx.lineWidth = 0.5;
                     ctx.stroke();
                 }
                 ctx.restore();
             }
 
+            // 故障线逻辑
             drawGlitchLines() {
                 let minX = Infinity, maxX = -Infinity;
                 this.points.forEach(p => { if(p[0] < minX) minX = p[0]; if(p[0] > maxX) maxX = p[0]; });
@@ -123,30 +123,28 @@
                 const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
                 const w = state.lineWidth;
                 
-                // 如果是静态模式，使用固定的随机种子
-                let randomFunc = state.isDynamic ? Math.random : this.pseudoRandom(this.seed);
+                // 静态模式使用固定随机序列
+                let prng = this.getPseudoRandom(this.seed);
+                let randomFunc = state.isDynamic ? Math.random : prng;
 
                 for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
                     if (randomFunc() < state.density) {
                         ctx.fillStyle = colors[Math.floor(randomFunc() * colors.length)];
-                        // 加入微小的 X 轴抖动
-                        const xOffset = (randomFunc() - 0.5) * 5; 
+                        // 加入位置噪声
+                        const xOffset = (randomFunc() - 0.5) * 4; 
                         ctx.fillRect(x + xOffset, 0, w, canvas.height); 
                     }
                 }
             }
 
-            // 伪随机生成器，用于静态模式
-            pseudoRandom(s) {
-                let mask = 0xffffffff;
-                let m_w = (123456789 + s * 10000) & mask;
-                let m_z = (987654321 - s * 10000) & mask;
-                return function() {
-                    m_z = (36969 * (m_z & 65535) + (m_z >> 16)) & mask;
-                    m_w = (18000 * (m_w & 65535) + (m_w >> 16)) & mask;
-                    let result = ((m_z << 16) + m_w) & mask;
-                    result /= 4294967296;
-                    return result + 0.5;
+            getPseudoRandom(s) {
+                let m_w = (123456789 + s * 10000) & 0xffffffff;
+                let m_z = (987654321 - s * 10000) & 0xffffffff;
+                return () => {
+                    m_z = (36969 * (m_z & 65535) + (m_z >> 16)) & 0xffffffff;
+                    m_w = (18000 * (m_w & 65535) + (m_w >> 16)) & 0xffffffff;
+                    let res = (((m_z << 16) + m_w) & 0xffffffff) / 4294967296;
+                    return res + 0.5;
                 }
             }
         }
@@ -161,38 +159,28 @@
             let x = pt[0], y = pt[1];
             let inside = false;
             for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-                let xi = poly[i][0], yi = poly[i][1];
-                let xj = poly[j][0], yj = poly[j][1];
+                let xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
                 let intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
                 if (intersect) inside = !inside;
             }
             return inside;
         }
 
+        // 斜向切割函数
         function sliceByAngledLine(polyPoints, xBase, my, angleDeg) {
             let left = [], right = [];
-            const angleRad = angleDeg * Math.PI / 180;
-            const tanA = Math.tan(angleRad);
-            const getSide = (p) => {
-                const lineX = xBase + (p[1] - my) * tanA;
-                return p[0] - lineX;
-            };
+            const tanA = Math.tan(angleDeg * Math.PI / 180);
+            const getSide = (p) => p[0] - (xBase + (p[1] - my) * tanA);
 
             for (let i = 0; i < polyPoints.length; i++) {
-                let p1 = polyPoints[i];
-                let p2 = polyPoints[(i + 1) % polyPoints.length];
-                let side1 = getSide(p1);
-                let side2 = getSide(p2);
-
-                if (side1 < 0) left.push(p1);
-                else right.push(p1);
-
-                if ((side1 < 0 && side2 >= 0) || (side1 >= 0 && side2 < 0)) {
-                    const dx = p2[0] - p1[0];
-                    const dy = p2[1] - p1[1];
+                let p1 = polyPoints[i], p2 = polyPoints[(i + 1) % polyPoints.length];
+                let s1 = getSide(p1), s2 = getSide(p2);
+                if (s1 < 0) left.push(p1); else right.push(p1);
+                if ((s1 < 0 && s2 >= 0) || (s1 >= 0 && s2 < 0)) {
+                    const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
                     const t = (xBase - p1[0] + (p1[1] - my) * tanA) / (dx - dy * tanA);
-                    left.push([p1[0] + t * dx, p1[1] + t * dy]);
-                    right.push([p1[0] + t * dx, p1[1] + t * dy]);
+                    const inter = [p1[0] + t * dx, p1[1] + t * dy];
+                    left.push(inter); right.push(inter);
                 }
             }
             return [left, right];
@@ -203,6 +191,8 @@
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
+            // 每次点击随机左右边界角度：30~45 度
+            // 左边正偏，右边负偏
             const angleL = 30 + Math.random() * 15;
             const angleR = -(30 + Math.random() * 15);
             const xL = mx - state.impactWidth / 2;
@@ -211,8 +201,10 @@
             for (let i = state.polygons.length - 1; i >= 0; i--) {
                 const target = state.polygons[i];
                 if (isPointInPoly([mx, my], target.points)) {
+                    // 1. 切出左侧不规则边界
                     let [p1, pRest] = sliceByAngledLine(target.points, xL, my, angleL);
                     if (p1.length > 2 && pRest.length > 2) {
+                        // 2. 切出右侧不规则边界，得到中间的随机四边形
                         let [centerQuad, p2] = sliceByAngledLine(pRest, xR, my, angleR);
                         if (centerQuad.length > 2) {
                             shatter(centerQuad, mx, my);
@@ -226,30 +218,27 @@
             }
         });
 
+        // 递归破碎逻辑
         function shatter(points, mx, my, index = -1) {
             const newPolys = [];
             for (let i = 0; i < points.length; i++) {
-                const p1 = points[i];
-                const p2 = points[(i + 1) % points.length];
+                const p1 = points[i], p2 = points[(i + 1) % points.length];
                 const ratio = 0.2 + Math.random() * 0.6;
-                const edgeX = p1[0] + (p2[0] - p1[0]) * ratio;
-                const edgeY = p1[1] + (p2[1] - p1[1]) * ratio;
+                const mid = [p1[0] + (p2[0]-p1[0])*ratio, p1[1] + (p2[1]-p1[1])*ratio];
 
-                // 碎裂块全部设为黑底，随机分配是否带故障线
-                const type1 = Math.random() < 0.6 ? 'glitch' : 'black';
-                const type2 = Math.random() < 0.3 ? 'glitch' : 'black';
+                // 强制黑底，随机分配故障线
+                const type1 = Math.random() < 0.65 ? 'glitch' : 'black';
+                const type2 = Math.random() < 0.4 ? 'glitch' : 'black';
 
-                newPolys.push(new Polygon([p1, [edgeX, edgeY], [mx, my]], type1));
-                newPolys.push(new Polygon([[edgeX, edgeY], p2, [mx, my]], type2));
+                newPolys.push(new Polygon([p1, mid, [mx, my]], type1));
+                newPolys.push(new Polygon([mid, p2, [mx, my]], type2));
             }
-
             if (index !== -1) state.polygons.splice(index, 1, ...newPolys);
             else state.polygons.push(...newPolys);
         }
 
         function render() {
-            // 背景不再需要填充，多边形自己负责底色
-            ctx.clearRect(0,0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             state.polygons.forEach(p => p.draw());
             requestAnimationFrame(render);
         }
