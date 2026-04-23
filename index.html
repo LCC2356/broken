@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v5.3 - 0-30° 随机几何版</title>
+    <title>FRACTURE PRO v6.0 - 不规则折线 & 信号闪烁版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -29,7 +29,7 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v5.3</div>
+        <div class="branding">FRACTURE_v6.0</div>
         
         <div class="control-group">
             <label>线宽</label>
@@ -44,7 +44,7 @@
         </div>
 
         <div class="switch-group">
-            <label>动态</label>
+            <label>故障闪烁</label>
             <label class="switch">
                 <input type="checkbox" id="ctrlDynamic" checked>
                 <span class="slider"></span>
@@ -65,7 +65,7 @@
         let state = {
             density: 0.7,
             lineWidth: 2,
-            impactWidth: 180, // 稍微收窄一点影响范围
+            impactWidth: 180,
             isDynamic: true,
             polygons: [] 
         };
@@ -112,15 +112,24 @@
             drawGlitchLines() {
                 let minX = Infinity, maxX = -Infinity;
                 this.points.forEach(p => { if(p[0] < minX) minX = p[0]; if(p[0] > maxX) maxX = p[0]; });
+                
                 const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
                 const w = state.lineWidth;
+                
+                // 固定使用种子来确定位置，保证闪烁时线条位置不变
                 let prng = this.getPseudoRandom(this.seed);
-                let randomFunc = state.isDynamic ? Math.random : prng;
 
                 for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
-                    if (randomFunc() < state.density) {
-                        ctx.fillStyle = colors[Math.floor(randomFunc() * colors.length)];
-                        ctx.fillRect(x + (randomFunc() - 0.5) * 4, 0, w, canvas.height); 
+                    const lineSeed = prng(); 
+                    if (lineSeed < state.density) {
+                        // 💎 核心修改：动态闪烁逻辑
+                        // 如果开启动态，每帧随机改变透明度或直接跳过绘制
+                        if (state.isDynamic && Math.random() < 0.15) continue; 
+                        
+                        ctx.globalAlpha = (state.isDynamic && Math.random() < 0.2) ? 0.4 : 1.0;
+                        ctx.fillStyle = colors[Math.floor(lineSeed * colors.length * 10) % colors.length];
+                        ctx.fillRect(x, 0, w, canvas.height); 
+                        ctx.globalAlpha = 1.0;
                     }
                 }
             }
@@ -136,25 +145,57 @@
             }
         }
 
-        function init() {
-            state.polygons = [new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]], 'base')];
+        // 💎 核心修改：生成带锚点的折线路径
+        function generatePolyline(xBase, my, angleDeg) {
+            const path = [];
+            const segments = 3; 
+            const h = canvas.height;
+            const tanA = Math.tan(angleDeg * Math.PI / 180);
+            
+            for (let i = 0; i <= segments; i++) {
+                const y = (h / segments) * i;
+                // 基础位置 + 倾斜偏移 + 随机偏折(Deflection)
+                const x = xBase + (y - my) * tanA + (Math.random() - 0.5) * 15;
+                path.push([x, y]);
+            }
+            return path;
         }
 
-        function sliceByAngledLine(polyPoints, xBase, my, angleDeg) {
+        // 💎 核心修改：基于折线路径的切割函数
+        function sliceByPolyline(polyPoints, path) {
             let left = [], right = [];
-            const tanA = Math.tan(angleDeg * Math.PI / 180);
-            const getSide = (p) => p[0] - (xBase + (p[1] - my) * tanA);
+            
+            const getXAtY = (y) => {
+                for (let i = 0; i < path.length - 1; i++) {
+                    if (y >= path[i][1] && y <= path[i+1][1]) {
+                        const t = (y - path[i][1]) / (path[i+1][1] - path[i][1]);
+                        return path[i][0] + t * (path[i+1][0] - path[i][0]);
+                    }
+                }
+                return path[0][0];
+            };
+
+            const getSide = (p) => p[0] - getXAtY(p[1]);
+
             for (let i = 0; i < polyPoints.length; i++) {
                 let p1 = polyPoints[i], p2 = polyPoints[(i + 1) % polyPoints.length];
                 let s1 = getSide(p1), s2 = getSide(p2);
+
                 if (s1 < 0) left.push(p1); else right.push(p1);
+
                 if ((s1 < 0 && s2 >= 0) || (s1 >= 0 && s2 < 0)) {
-                    const t = (xBase - p1[0] + (p1[1] - my) * tanA) / ((p2[0] - p1[0]) - (p2[1] - p1[1]) * tanA);
-                    const inter = [p1[0] + t * (p2[0] - p1[0]), p1[1] + t * (p2[1] - p1[1])];
-                    left.push(inter); right.push(inter);
+                    // 简化处理：求 y 轴交点。由于折线是垂直分布的，我们分段找交点
+                    let iy = p1[1] + (p2[1] - p1[1]) * (Math.abs(s1) / (Math.abs(s1) + Math.abs(s2)));
+                    let ix = getXAtY(iy);
+                    left.push([ix, iy]);
+                    right.push([ix, iy]);
                 }
             }
             return [left, right];
+        }
+
+        function init() {
+            state.polygons = [new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]], 'base')];
         }
 
         canvas.addEventListener('mousedown', (e) => {
@@ -162,19 +203,21 @@
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-            // 💎 核心修改：角度范围调整为 0-30 度，方向随机
-            const angleL = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 30);
-            const angleR = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 30);
-            
-            const xL = mx - (30 + Math.random() * 70); 
-            const xR = mx + (30 + Math.random() * 70); 
+            const xL = mx - (40 + Math.random() * 60);
+            const xR = mx + (40 + Math.random() * 60);
+            const angL = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 30);
+            const angR = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 30);
+
+            // 生成折线边界
+            const pathL = generatePolyline(xL, my, angL);
+            const pathR = generatePolyline(xR, my, angR);
 
             for (let i = state.polygons.length - 1; i >= 0; i--) {
                 const target = state.polygons[i];
                 if (isPointInPoly([mx, my], target.points)) {
-                    let [p1, pRest] = sliceByAngledLine(target.points, xL, my, angleL);
+                    let [p1, pRest] = sliceByPolyline(target.points, pathL);
                     if (p1.length > 2 && pRest.length > 2) {
-                        let [centerQuad, p2] = sliceByAngledLine(pRest, xR, my, angleR);
+                        let [centerQuad, p2] = sliceByPolyline(pRest, pathR);
                         if (centerQuad.length > 2) {
                             shatter(centerQuad, mx, my);
                             state.polygons.splice(i, 1);
@@ -200,8 +243,8 @@
                 const p1 = points[i], p2 = points[(i + 1) % points.length];
                 const r = 0.2 + Math.random() * 0.6;
                 const mid = [p1[0] + (p2[0]-p1[0])*r, p1[1] + (p2[1]-p1[1])*r];
-                newPolys.push(new Polygon([p1, mid, [mx, my]], Math.random() < 0.65 ? 'glitch' : 'black'));
-                newPolys.push(new Polygon([mid, p2, [mx, my]], Math.random() < 0.4 ? 'glitch' : 'black'));
+                newPolys.push(new Polygon([p1, mid, [mx, my]], Math.random() < 0.6 ? 'glitch' : 'black'));
+                newPolys.push(new Polygon([mid, p2, [mx, my]], Math.random() < 0.3 ? 'glitch' : 'black'));
             }
             if (index !== -1) state.polygons.splice(index, 1, ...newPolys);
             else state.polygons.push(...newPolys);
