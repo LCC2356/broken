@@ -47,6 +47,13 @@
                 <span class="slider"></span>
             </label>
         </div>
+        <div class="switch-group">
+            <label>双击</label>
+            <label class="switch">
+                <input type="checkbox" id="ctrlDoubleStrike">
+                <span class="slider"></span>
+            </label>
+        </div>
         <button id="btnClear" style="margin-left: auto;">REBOOT</button>
     </div>
 
@@ -59,10 +66,10 @@
         const ctx = canvas.getContext('2d');
         
         let state = {
-            // 1. 同步初始状态
             density: 0.15, 
             lineWidth: 1,
             isDynamic: true,
+            isDoubleStrike: false, // 🎯 新增：双击状态位
             impactWidth: 160,
             screenGlitch: 0, 
             polygons: [] 
@@ -71,6 +78,7 @@
         document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
         document.getElementById('ctrlLineWidth').oninput = e => { state.lineWidth = parseInt(e.target.value); document.getElementById('valLineWidth').innerText = e.target.value; };
         document.getElementById('ctrlDynamic').onchange = e => { state.isDynamic = e.target.checked; };
+        document.getElementById('ctrlDoubleStrike').onchange = e => { state.isDoubleStrike = e.target.checked; }; // 🎯 监听双击开关
         document.getElementById('btnClear').onclick = init;
 
         class Polygon {
@@ -129,7 +137,6 @@
                 ctx.fillStyle = grad; ctx.fill();
             }
 
-            // 2. 修改：增加横向故障线可能性
             drawGlitchLines() {
                 let minX = 2000, maxX = 0;
                 let minY = 2000, maxY = 0;
@@ -140,12 +147,9 @@
                 
                 const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
                 const w = Math.max(1, state.lineWidth);
-                
-                // 判定方向：80% 竖向, 20% 横向
                 const isHorizontal = this.absRandom(this.seed, 99.9) < 0.2;
 
                 if (!isHorizontal) {
-                    // 竖线逻辑
                     for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
                         const noise = this.absRandom(x, this.seed);
                         if (noise < state.density) {
@@ -160,7 +164,6 @@
                         }
                     }
                 } else {
-                    // 横线逻辑
                     for (let y = Math.floor(minY); y <= Math.ceil(maxY); y += w) {
                         const noise = this.absRandom(y, this.seed + 500); 
                         if (noise < state.density) {
@@ -227,20 +230,18 @@
             state.polygons = [new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]], 'base', null)];
         }
 
-        canvas.addEventListener('mousedown', (e) => {
-            if (e.button === 2) return;
-            state.screenGlitch = 8; 
-            const rect = canvas.getBoundingClientRect();
-            const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+        // 🎯 核心逻辑抽象：触发一次碎裂冲击
+        function triggerImpact(cx, cy) {
             const angL = (Math.random() - 0.5) * 30; 
             const angR = (Math.random() - 0.5) * 30;
-            const xL = mx - (40 + Math.random() * 40);
-            const xR = mx + (40 + Math.random() * 40);
-            const pathL = generatePolyline(xL, my, angL);
-            const pathR = generatePolyline(xR, my, angR);
+            const xL = cx - (40 + Math.random() * 40);
+            const xR = cx + (40 + Math.random() * 40);
+            const pathL = generatePolyline(xL, cy, angL);
+            const pathR = generatePolyline(xR, cy, angR);
+            
             let nextPolygons = [];
             const impactSeed = Math.random();
+            
             state.polygons.forEach(target => {
                 let minX = 2000, maxX = 0;
                 target.points.forEach(p => { if(p[0]<minX) minX=p[0]; if(p[0]>maxX) maxX=p[0]; });
@@ -252,7 +253,7 @@
                 if (pRest.length > 2) {
                     let [pMid, pRight] = sliceByPolyline(pRest, pathR);
                     if (pMid.length > 2) {
-                        const fragments = shatter(pMid, mx, my, impactSeed);
+                        const fragments = shatter(pMid, cx, cy, impactSeed);
                         nextPolygons.push(...fragments);
                     }
                     if (pLeft.length > 2) nextPolygons.push(new Polygon(pLeft, target.type, target.seed));
@@ -261,7 +262,28 @@
                     if (pLeft.length > 2) nextPolygons.push(new Polygon(pLeft, target.type, target.seed));
                 }
             });
+            
             state.polygons = nextPolygons.filter(p => p.getArea() > 0.5).slice(0, 1000);
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 2) return;
+            state.screenGlitch = 8; 
+            
+            const rect = canvas.getBoundingClientRect();
+            const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+            
+            // 🎯 1. 触发主点击碎裂
+            triggerImpact(mx, my);
+
+            // 🎯 2. 如果开启了双击，在随机 30px 半径内额外触发一次碎裂
+            if (state.isDoubleStrike) {
+                // (Math.random() - 0.5) * 60 会生成 -30 到 30 之间的随机数
+                const offsetX = (Math.random() - 0.5) * 60;
+                const offsetY = (Math.random() - 0.5) * 60;
+                triggerImpact(mx + offsetX, my + offsetY);
+            }
         });
 
         canvas.addEventListener('contextmenu', (e) => {
