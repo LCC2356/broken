@@ -48,8 +48,8 @@
         </div>
         <div class="control-group" style="border-color: #ff009e;">
             <label>裂纹粗细</label>
-            <input type="range" id="ctrlCrackThick" min="1" max="10" value="1">
-            <span id="valCrackThick">1</span>
+            <input type="range" id="ctrlCrackThick" min="1" max="50" value="2">
+            <span id="valCrackThick">0.2</span>
         </div>
         <div class="control-group" style="border-color: #ff009e;">
             <label>高亮大小%</label>
@@ -91,19 +91,24 @@
             polygons: [],
             cracks: [],
             
-            // 🎯 新增：裂纹系统状态变量
-            crackScale: 0.10,      // 默认10%（缩小90%）
-            crackThickness: 1,     // 默认1px
-            blastScale: 0.05       // 默认5%
+            crackScale: 0.10,      
+            crackThickness: 0.2,   // 🎯 初始粗细改为 0.2，带来极限纤维划痕感
+            blastScale: 0.05       
         };
 
         // 事件监听器
         document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
         document.getElementById('ctrlLineWidth').oninput = e => { state.lineWidth = parseInt(e.target.value); document.getElementById('valLineWidth').innerText = e.target.value; };
         
-        // 🎯 新增：裂纹UI控制事件
         document.getElementById('ctrlCrackScale').oninput = e => { state.crackScale = e.target.value / 100; document.getElementById('valCrackScale').innerText = e.target.value; };
-        document.getElementById('ctrlCrackThick').oninput = e => { state.crackThickness = parseInt(e.target.value); document.getElementById('valCrackThick').innerText = e.target.value; };
+        
+        // 🎯 支持小数精度的粗细调节计算
+        document.getElementById('ctrlCrackThick').oninput = e => { 
+            const val = e.target.value / 10;
+            state.crackThickness = val; 
+            document.getElementById('valCrackThick').innerText = val.toFixed(1); 
+        };
+        
         document.getElementById('ctrlBlastScale').oninput = e => { state.blastScale = e.target.value / 100; document.getElementById('valBlastScale').innerText = e.target.value; };
 
         document.getElementById('ctrlDynamic').onchange = e => { state.isDynamic = e.target.checked; };
@@ -118,13 +123,11 @@
                 this.rays = [];
                 this.webLines = []; 
                 
-                // 记录初始化的 100% 基础高亮大小
                 this.baseBlastRadius = 30 + Math.random() * 20;
 
                 const numRays = 15 + Math.floor(Math.random() * 10);
                 for(let i=0; i<numRays; i++) {
                     const angle = (i / numRays) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
-                    // 记录初始化的 100% 基础裂纹长度
                     const length = (canvas.height * 0.5) + Math.random() * 500; 
                     
                     let currentX = 0, currentY = 0;
@@ -139,7 +142,6 @@
                         let nextY = currentY + Math.sin(rayAngle) * r;
                         segments.push({x1: currentX, y1: currentY, x2: nextX, y2: nextY});
                         
-                        // 蛛网连接线的基础长度
                         if (j > 0 && Math.random() > 0.6) {
                             const webAngle = rayAngle + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2) + (Math.random()-0.5)*0.2;
                             const webLen = 10 + Math.random() * 30; 
@@ -159,9 +161,9 @@
             draw() {
                 ctx.save();
                 ctx.translate(this.cx, this.cy);
-                ctx.globalAlpha = 1.0; // 强制去除闪烁
+                ctx.globalAlpha = 1.0; 
 
-                // 1. 绘制核心泄露背光（动态绑定高亮比例滑块）
+                // 1. 绘制核心泄露背光
                 if (state.blastScale > 0) {
                     const blastRadius = this.baseBlastRadius * state.blastScale;
                     const blastGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, blastRadius);
@@ -175,10 +177,9 @@
                     ctx.fill();
                 }
 
-                // 读取滑块缩放比例
                 const scale = state.crackScale;
 
-                // 2. 绘制放射裂纹与蛛网线（实时缩放坐标点）
+                // 2. 绘制放射裂纹与蛛网线
                 ctx.beginPath();
                 this.rays.forEach(segments => {
                     segments.forEach(seg => {
@@ -192,7 +193,7 @@
                 });
                 
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-                ctx.lineWidth = state.crackThickness; // 动态绑定粗细滑块
+                ctx.lineWidth = state.crackThickness; // 🎯 这里的细微小数起作用
                 ctx.shadowBlur = 0; 
                 ctx.stroke();
 
@@ -204,7 +205,7 @@
                      ctx.lineTo(firstSeg.x2 * scale, firstSeg.y2 * scale);
                 });
                 ctx.strokeStyle = Math.random() > 0.5 ? 'rgba(0, 255, 255, 0.5)' : 'rgba(255, 0, 255, 0.5)';
-                ctx.lineWidth = state.crackThickness; 
+                ctx.lineWidth = state.crackThickness; // 🎯 同步亚像素粗细
                 ctx.globalCompositeOperation = 'screen';
                 ctx.stroke();
 
