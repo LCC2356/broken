@@ -97,6 +97,9 @@
 
                 if (this.type === 'base') {
                     ctx.fillStyle = '#74ff06'; ctx.fill();
+                } else if (this.type === 'pink') {
+                    // 🌈 新增：支持品红色正方形的渲染
+                    ctx.fillStyle = '#ff009e'; ctx.fill();
                 } else {
                     ctx.fillStyle = '#000'; ctx.fill();
                     if (this.type === 'glitch' && state.lineWidth > 0) {
@@ -151,7 +154,6 @@
             }
         }
 
-        // 修改：增加随机锚点抖动，提升不规则感
         function generatePolyline(xBase, my, angleDeg) {
             const path = [];
             const segments = 4; 
@@ -197,12 +199,14 @@
         }
 
         canvas.addEventListener('mousedown', (e) => {
+            // 防止右键点击触发左键碎裂逻辑
+            if (e.button === 2) return;
+
             const rect = canvas.getBoundingClientRect();
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-            // 1. 冲击带参数
-            const angL = (Math.random() - 0.5) * 30; // 扩大到 -15~15
+            const angL = (Math.random() - 0.5) * 30; 
             const angR = (Math.random() - 0.5) * 30;
             const xL = mx - (40 + Math.random() * 40);
             const xR = mx + (40 + Math.random() * 40);
@@ -212,9 +216,7 @@
             let nextPolygons = [];
             const impactSeed = Math.random();
 
-            // 2. 💎 修正：全局强制扫描所有多边形
             state.polygons.forEach(target => {
-                // 如果多边形完全不在冲击范围内，直接跳过计算（性能优化）
                 let minX = 2000, maxX = 0;
                 target.points.forEach(p => { if(p[0]<minX) minX=p[0]; if(p[0]>maxX) maxX=p[0]; });
                 if (maxX < xL - 100 || minX > xR + 100) {
@@ -222,12 +224,10 @@
                     return;
                 }
 
-                // 进行切割
                 let [pLeft, pRest] = sliceByPolyline(target.points, pathL);
                 if (pRest.length > 2) {
                     let [pMid, pRight] = sliceByPolyline(pRest, pathR);
                     if (pMid.length > 2) {
-                        // 冲击带中间的部分：再次碎裂
                         const fragments = shatter(pMid, mx, my, impactSeed);
                         nextPolygons.push(...fragments);
                     }
@@ -238,8 +238,27 @@
                 }
             });
 
-            // 💎 修正：如果碎片太多，自动剔除面积极小的碎屑以保证后续还能点得动
             state.polygons = nextPolygons.filter(p => p.getArea() > 0.5).slice(0, 1000);
+        });
+
+        // 🎯 新增：右键生成品红色正方形
+        canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); 
+
+            const rect = canvas.getBoundingClientRect();
+            const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+            
+            const h = canvas.height;
+            const half = h / 2;
+
+            const squarePoints = [
+                [mx - half, 0],       
+                [mx + half, 0],       
+                [mx + half, h],       
+                [mx - half, h]        
+            ];
+
+            state.polygons.push(new Polygon(squarePoints, 'pink', null));
         });
 
         function shatter(points, mx, my, impactSeed) {
