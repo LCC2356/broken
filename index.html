@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v8.7 - 纯粹物理折线版</title>
+    <title>FRACTURE PRO v8.8 - 极致物理折线版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -29,7 +29,7 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v8.7</div>
+        <div class="branding">FRACTURE_v8.8</div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="1" max="150" value="5">
@@ -55,6 +55,12 @@
             <label>横线贯穿%</label>
             <input type="range" id="ctrlPierceH" min="0" max="100" value="10">
             <span id="valPierceH">10</span>
+        </div>
+
+        <div class="control-group" style="border-color: #00FFFF;">
+            <label>边界扭曲%</label>
+            <input type="range" id="ctrlDistortion" min="0" max="100" value="80">
+            <span id="valDistortion">80</span>
         </div>
         
         <div class="control-group" style="border-color: #ff009e;">
@@ -101,6 +107,7 @@
             horizProb: 0.10, 
             pierceV: 0.90,   
             pierceH: 0.10,   
+            distortion: 0.80, // 🎯 边界扭曲度，默认 80%
             isDynamic: true,
             isDoubleStrike: false, 
             isCracksEnabled: true, 
@@ -119,6 +126,8 @@
         document.getElementById('ctrlPierceH').oninput = e => { state.pierceH = e.target.value / 100; document.getElementById('valPierceH').innerText = e.target.value; };
         document.getElementById('ctrlLineWidth').oninput = e => { const val = e.target.value / 10; state.lineWidth = val; document.getElementById('valLineWidth').innerText = val.toFixed(1); };
         document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
+        document.getElementById('ctrlDistortion').oninput = e => { state.distortion = e.target.value / 100; document.getElementById('valDistortion').innerText = e.target.value; };
+        
         document.getElementById('ctrlCrackScale').oninput = e => { state.crackScale = e.target.value / 100; document.getElementById('valCrackScale').innerText = e.target.value; };
         document.getElementById('ctrlCrackThick').oninput = e => { const val = e.target.value / 10; state.crackThickness = val; document.getElementById('valCrackThick').innerText = val.toFixed(1); };
         document.getElementById('ctrlBlastScale').oninput = e => { state.blastScale = e.target.value / 100; document.getElementById('valBlastScale').innerText = e.target.value; };
@@ -127,6 +136,45 @@
         document.getElementById('ctrlCracks').onchange = e => { state.isCracksEnabled = e.target.checked; };
         document.getElementById('ctrlDoubleStrike').onchange = e => { state.isDoubleStrike = e.target.checked; }; 
         document.getElementById('btnClear').onclick = init;
+
+        // 🎯 核心算法：为任意直线生成稳定的随机折线序列，保证相邻碎块无缝拼接
+        function getJaggedPoints(p1, p2, distortion) {
+            const dx = p2[0] - p1[0];
+            const dy = p2[1] - p1[1];
+            const len = Math.sqrt(dx*dx + dy*dy);
+
+            if (len < 8 || distortion === 0) return [[p2[0], p2[1]]];
+
+            // 规范化起点体系，确保无论从哪个方向绘制同一条边，抖动结果都完全一致
+            const isForward = p1[0] < p2[0] || (p1[0] === p2[0] && p1[1] < p2[1]);
+            const pStart = isForward ? p1 : p2;
+            const pEnd = isForward ? p2 : p1;
+
+            const sdx = pEnd[0] - pStart[0];
+            const sdy = pEnd[1] - pStart[1];
+            const snx = -sdy / len;
+            const sny = sdx / len;
+
+            const segments = Math.min(25, Math.max(2, Math.floor(len / 12))); 
+            const seedBase = pStart[0] * 17.1 + pStart[1] * 31.3 + pEnd[0] * 53.7 + pEnd[1] * 79.19;
+
+            const points = [];
+            for (let i = 1; i < segments; i++) {
+                const t = i / segments;
+                const px = pStart[0] + sdx * t;
+                const py = pStart[1] + sdy * t;
+                // 伪随机哈希
+                const noise = Math.sin(seedBase + i * 13.579) * 43758.5453;
+                const frac = noise - Math.floor(noise);
+                // 折角幅度随距离和扭曲度放大
+                const offsetMag = (frac - 0.5) * 2 * Math.min(25, len * 0.25) * distortion;
+                points.push([px + snx * offsetMag, py + sny * offsetMag]);
+            }
+
+            if (!isForward) points.reverse();
+            points.push([p2[0], p2[1]]);
+            return points;
+        }
 
         class CrackNode {
             constructor(cx, cy) {
@@ -190,12 +238,18 @@
                 }
 
                 const scale = state.crackScale;
+                const noiseFactor = state.distortion; 
 
                 ctx.beginPath();
                 this.rays.forEach(segments => {
                     segments.forEach(seg => {
-                        ctx.moveTo(seg.x1 * scale, seg.y1 * scale);
-                        ctx.lineTo(seg.x2 * scale, seg.y2 * scale);
+                        // 🎯 加入受控微小抖动，打破超采样的死板干净线
+                        const jx1 = (Math.random() - 0.5) * 1.5 * noiseFactor;
+                        const jy1 = (Math.random() - 0.5) * 1.5 * noiseFactor;
+                        const jx2 = (Math.random() - 0.5) * 1.5 * noiseFactor;
+                        const jy2 = (Math.random() - 0.5) * 1.5 * noiseFactor;
+                        ctx.moveTo(seg.x1 * scale + jx1, seg.y1 * scale + jy1);
+                        ctx.lineTo(seg.x2 * scale + jx2, seg.y2 * scale + jy2);
                     });
                 });
                 this.webLines.forEach(web => {
@@ -210,8 +264,8 @@
                 this.rays.forEach(segments => {
                     segments.forEach(seg => {
                         if (Math.random() > 0.4) {
-                            const offsetX = (Math.random() - 0.5) * 3;
-                            const offsetY = (Math.random() - 0.5) * 3;
+                            const offsetX = (Math.random() - 0.5) * 3 * noiseFactor;
+                            const offsetY = (Math.random() - 0.5) * 3 * noiseFactor;
                             ctx.moveTo(seg.x1 * scale + offsetX, seg.y1 * scale + offsetY);
                             ctx.lineTo(seg.x2 * scale + offsetX, seg.y2 * scale + offsetY);
                         }
@@ -241,6 +295,8 @@
                 this.points = points; 
                 this.type = type; 
                 this.seed = seed !== null ? seed : Math.random();
+                this.jaggedCache = null;
+                this.cachedDistortion = -1;
             }
 
             getArea() {
@@ -252,12 +308,30 @@
                 return Math.abs(area) / 2;
             }
 
+            // 🎯 将所有边界的渲染转化为缓存好的复杂折线体系
+            buildJaggedPath() {
+                if (this.cachedDistortion === state.distortion) return;
+                this.jaggedCache = [];
+                for (let i = 0; i < this.points.length; i++) {
+                    const p1 = this.points[i];
+                    const p2 = this.points[(i + 1) % this.points.length];
+                    const jPoints = getJaggedPoints(p1, p2, state.distortion);
+                    this.jaggedCache.push(...jPoints);
+                }
+                this.cachedDistortion = state.distortion;
+            }
+
             draw() {
                 if (this.points.length < 3) return;
+                this.buildJaggedPath();
+
                 ctx.save();
                 ctx.beginPath();
                 ctx.moveTo(this.points[0][0], this.points[0][1]);
-                for (let i = 1; i < this.points.length; i++) ctx.lineTo(this.points[i][0], this.points[i][1]);
+                // 🎯 运用计算好的折线边界
+                for (let i = 0; i < this.jaggedCache.length; i++) {
+                    ctx.lineTo(this.jaggedCache[i][0], this.jaggedCache[i][1]);
+                }
                 ctx.closePath();
 
                 if (this.type === 'base') {
@@ -268,7 +342,7 @@
                     ctx.fillStyle = '#000'; ctx.fill();
                     if (this.type === 'glitch' && state.lineWidth > 0) {
                         ctx.save();
-                        ctx.clip();
+                        ctx.clip(); // 这里的 clip 会完美限制在复杂的锯齿折线多边形内部
                         this.drawGlitchLines();
                         this.drawInnerGradient();
                         ctx.restore();
@@ -276,7 +350,7 @@
                 }
 
                 if (this.type !== 'base') {
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
                     ctx.lineWidth = 0.5;
                     ctx.stroke();
                 }
@@ -303,6 +377,7 @@
                 const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
                 const w = Math.max(0.01, state.lineWidth); 
                 const step = Math.max(1, w); 
+                
                 const isHorizontal = this.absRandom(this.seed, 99.9) < state.horizProb; 
 
                 if (!isHorizontal) {
@@ -348,16 +423,13 @@
             }
         }
 
-        // 🎯 进化1：主分裂带折线化
         function generatePolyline(xBase, my, angleDeg) {
             const path = [];
-            const segments = 15; // 增加段数带来丰富的折角
+            const segments = 4; 
             const tanA = Math.tan(angleDeg * Math.PI / 180);
             for (let i = 0; i <= segments; i++) {
                 const y = (H / segments) * i;
-                // 强制首尾两点对齐，内部节点激烈随机偏移（+/- 30px）
-                const jitter = (i === 0 || i === segments) ? 0 : (Math.random() - 0.5) * 60; 
-                const x = xBase + (y - my) * tanA + jitter;
+                const x = xBase + (y - my) * tanA + (Math.random() - 0.5) * 20;
                 path.push([x, y]);
             }
             return path;
@@ -393,29 +465,6 @@
         function init() {
             state.polygons = [new Polygon([[0, 0], [W, 0], [W, H], [0, H]], 'base', null)];
             state.cracks = []; 
-        }
-
-        // 🎯 进化2：基于共用哈希的折线中间点生成器，确保相邻碎块无缝贴合
-        function getJaggedMidpoint(p1, p2) {
-            const xMin = Math.min(p1[0], p2[0]), yMin = Math.min(p1[1], p2[1]);
-            const xMax = Math.max(p1[0], p2[0]), yMax = Math.max(p1[1], p2[1]);
-            const mx = (p1[0] + p2[0]) / 2, my = (p1[1] + p2[1]) / 2;
-            
-            // 将唯一的线段两端点转化为稳定种子
-            const seed = xMin * 13.1 + yMin * 17.3 + xMax * 23.5 + yMax * 29.7;
-            const rand = Math.sin(seed * 12.9898) * 43758.5453;
-            const frac = rand - Math.floor(rand);
-            
-            const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
-            const len = Math.sqrt(dx*dx + dy*dy);
-            
-            if (len < 10) return [mx, my]; // 线段太短则不弯折
-            
-            // 安全的最大位移，防止多边形自交翻转
-            const offsetMag = Math.min(25, len * 0.2) * (frac - 0.5) * 2; 
-            const nx = -dy / len, ny = dx / len;
-            
-            return [mx + nx * offsetMag, my + ny * offsetMag];
         }
 
         function triggerImpact(cx, cy) {
@@ -464,6 +513,7 @@
             const rect = canvas.getBoundingClientRect();
             const mx = (e.clientX - rect.left) * (W / rect.width);
             const my = (e.clientY - rect.top) * (H / rect.height);
+            
             triggerImpact(mx, my);
 
             if (state.isDoubleStrike) {
@@ -482,25 +532,17 @@
             state.polygons.push(new Polygon(squarePoints, 'pink', null));
         });
 
-        // 🎯 进化3：支持5边形折角碎片的切割重构
         function shatter(points, mx, my, impactSeed) {
             const res = [];
-            const center = [mx, my];
             for (let i = 0; i < points.length; i++) {
                 const p1 = points[i], p2 = points[(i + 1) % points.length];
                 const r = 0.3 + Math.random() * 0.4;
-                const midEdge = [p1[0] + (p2[0]-p1[0])*r, p1[1] + (p2[1]-p1[1])*r];
+                const mid = [p1[0] + (p2[0]-p1[0])*r, p1[1] + (p2[1]-p1[1])*r];
                 const type1 = Math.random() < 0.7 ? 'glitch' : 'black';
                 const type2 = Math.random() < 0.4 ? 'glitch' : 'black';
-                const getSeed = () => Math.random() < 0.5 ? impactSeed : Math.random();
-
-                // 获取确定性的共用折角点
-                const jP1Center = getJaggedMidpoint(p1, center);
-                const jMidCenter = getJaggedMidpoint(midEdge, center);
-                const jP2Center = getJaggedMidpoint(p2, center);
-                
-                res.push(new Polygon([p1, midEdge, jMidCenter, center, jP1Center], type1, getSeed()));
-                res.push(new Polygon([midEdge, p2, jP2Center, center, jMidCenter], type2, getSeed()));
+                const getSeed = (s) => Math.random() < 0.5 ? impactSeed : Math.random();
+                res.push(new Polygon([p1, mid, [mx, my]], type1, getSeed()));
+                res.push(new Polygon([mid, p2, [mx, my]], type2, getSeed()));
             }
             return res;
         }
