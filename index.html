@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v8.5 - 极细超采样版</title>
+    <title>FRACTURE PRO v8.4 - 极致交互版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -23,19 +23,17 @@
         button { background: #333; border: 1px solid #555; color: #fff; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: bold; }
         button:hover { border-color: #74ff06; color: #74ff06; }
         .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #050505; padding: 20px; }
-        
-        /* 注意这里的变化：用 CSS 锁死视觉尺寸，Canvas 内部尺寸会被放大以实现超采样 */
-        canvas { background-color: #74ff06; cursor: crosshair; image-rendering: pixelated; width: 2000px; height: 100px; }
+        canvas { background-color: #74ff06; cursor: crosshair; image-rendering: pixelated; }
     </style>
 </head>
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v8.5</div>
+        <div class="branding">FRACTURE_v8.4</div>
         <div class="control-group">
             <label>线宽</label>
-            <input type="range" id="ctrlLineWidth" min="1" max="150" value="5">
-            <span id="valLineWidth">0.5</span>
+            <input type="range" id="ctrlLineWidth" min="1" max="150" value="10">
+            <span id="valLineWidth">1.0</span>
         </div>
         <div class="control-group">
             <label>密度</label>
@@ -66,8 +64,8 @@
         </div>
         <div class="control-group" style="border-color: #ff009e;">
             <label>裂纹粗细</label>
-            <input type="range" id="ctrlCrackThick" min="1" max="50" value="5">
-            <span id="valCrackThick">0.5</span>
+            <input type="range" id="ctrlCrackThick" min="1" max="50" value="2">
+            <span id="valCrackThick">0.2</span>
         </div>
         <div class="control-group" style="border-color: #ff009e;">
             <label>高亮大小%</label>
@@ -91,30 +89,19 @@
     </div>
 
     <div class="workspace">
-        <canvas id="mainCanvas"></canvas>
+        <canvas id="mainCanvas" width="2000" height="100"></canvas>
     </div>
 
     <script>
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d');
         
-        // 🌟 核心升级：设定逻辑宽高与设备超采样倍率 (Device Pixel Ratio)
-        const W = 2000;
-        const H = 100;
-        // 强制最低 2 倍超采样，确保 0.5px 的线能化为纯粹的 1 物理像素点
-        const dpr = Math.max(window.devicePixelRatio || 1, 2); 
-        
-        canvas.width = W * dpr;
-        canvas.height = H * dpr;
-        // 通过 scale，让所有基于 2000x100 的逻辑坐标系自动放大到物理高清分辨率
-        ctx.scale(dpr, dpr);
-
         let state = {
             density: 0.15, 
-            lineWidth: 0.5, // 默认 0.5，在 dpr=2 下是锐利的 1物理像素
-            horizProb: 0.10, 
-            pierceV: 0.90,   
-            pierceH: 0.10,   
+            lineWidth: 1.0, 
+            horizProb: 0.10, // 默认 10% 块是横向，90%是竖向
+            pierceV: 0.90,   // 🎯 竖向线条 90% 贯穿所有碎块
+            pierceH: 0.10,   // 🎯 横向线条 10% 贯穿所有碎块
             isDynamic: true,
             isDoubleStrike: false, 
             isCracksEnabled: true, 
@@ -124,7 +111,7 @@
             cracks: [],
             
             crackScale: 0.10,      
-            crackThickness: 0.5,   
+            crackThickness: 0.2,   
             blastScale: 0.05       
         };
 
@@ -157,7 +144,7 @@
                 const numRays = 15 + Math.floor(Math.random() * 10);
                 for(let i=0; i<numRays; i++) {
                     const angle = (i / numRays) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
-                    const length = (H * 0.5) + Math.random() * 500; 
+                    const length = (canvas.height * 0.5) + Math.random() * 500; 
                     
                     let currentX = 0, currentY = 0;
                     let segments = [];
@@ -296,8 +283,8 @@
             }
 
             drawGlitchLines() {
-                let minX = W, maxX = 0;
-                let minY = H, maxY = 0;
+                let minX = 2000, maxX = 0;
+                let minY = 2000, maxY = 0;
                 this.points.forEach(p => { 
                     if(p[0] < minX) minX = p[0]; if(p[0] > maxX) maxX = p[0]; 
                     if(p[1] < minY) minY = p[1]; if(p[1] > maxY) maxY = p[1];
@@ -311,8 +298,11 @@
                 const isHorizontal = this.absRandom(this.seed, 99.9) < state.horizProb; 
 
                 if (!isHorizontal) {
+                    // 🎯 竖向线条渲染
                     for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += step) {
+                        // 决定当前的 x 坐标是否是一条贯穿全屏的主线
                         const isPiercing = this.absRandom(x, 111.11) < state.pierceV;
+                        // 如果贯穿，使用全局统一的种子(222.22)；如果不贯穿，使用碎块本地自己的种子
                         const seedToUse = isPiercing ? 222.22 : this.seed;
                         const noise = this.absRandom(x, seedToUse);
                         
@@ -323,12 +313,14 @@
                                 if (flicker < 0.3) ctx.globalAlpha = 0.4;
                             }
                             ctx.fillStyle = colors[Math.floor(noise * colors.length * 13) % colors.length];
-                            ctx.fillRect(x, 0, w, H); 
+                            ctx.fillRect(x, 0, w, canvas.height); 
                             ctx.globalAlpha = 1.0;
                         }
                     }
                 } else {
+                    // 🎯 横向线条渲染
                     for (let y = Math.floor(minY); y <= Math.ceil(maxY); y += step) {
+                        // 横向贯穿判定
                         const isPiercing = this.absRandom(y, 333.33) < state.pierceH;
                         const seedToUse = isPiercing ? 444.44 : this.seed;
                         const noise = this.absRandom(y, seedToUse + 500); 
@@ -340,7 +332,7 @@
                                 if (flicker < 0.3) ctx.globalAlpha = 0.4;
                             }
                             ctx.fillStyle = colors[Math.floor(noise * colors.length * 13) % colors.length];
-                            ctx.fillRect(0, y, W, w); 
+                            ctx.fillRect(0, y, canvas.width, w); 
                             ctx.globalAlpha = 1.0;
                         }
                     }
@@ -356,9 +348,10 @@
         function generatePolyline(xBase, my, angleDeg) {
             const path = [];
             const segments = 4; 
+            const h = canvas.height;
             const tanA = Math.tan(angleDeg * Math.PI / 180);
             for (let i = 0; i <= segments; i++) {
-                const y = (H / segments) * i;
+                const y = (h / segments) * i;
                 const x = xBase + (y - my) * tanA + (Math.random() - 0.5) * 20;
                 path.push([x, y]);
             }
@@ -393,7 +386,7 @@
         }
 
         function init() {
-            state.polygons = [new Polygon([[0, 0], [W, 0], [W, H], [0, H]], 'base', null)];
+            state.polygons = [new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]], 'base', null)];
             state.cracks = []; 
         }
 
@@ -414,7 +407,7 @@
             const impactSeed = Math.random();
             
             state.polygons.forEach(target => {
-                let minX = W, maxX = 0;
+                let minX = 2000, maxX = 0;
                 target.points.forEach(p => { if(p[0]<minX) minX=p[0]; if(p[0]>maxX) maxX=p[0]; });
                 if (maxX < xL - 100 || minX > xR + 100) {
                     nextPolygons.push(target);
@@ -442,9 +435,8 @@
             state.screenGlitch = 8; 
             
             const rect = canvas.getBoundingClientRect();
-            // 鼠标交互现在映射回 2000x100 的逻辑坐标系
-            const mx = (e.clientX - rect.left) * (W / rect.width);
-            const my = (e.clientY - rect.top) * (H / rect.height);
+            const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const my = (e.clientY - rect.top) * (canvas.height / rect.height);
             
             triggerImpact(mx, my);
 
@@ -458,9 +450,10 @@
         canvas.addEventListener('contextmenu', (e) => {
             e.preventDefault(); 
             const rect = canvas.getBoundingClientRect();
-            const mx = (e.clientX - rect.left) * (W / rect.width);
-            const half = H / 2;
-            const squarePoints = [[mx - half, 0], [mx + half, 0], [mx + half, H], [mx - half, H]];
+            const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const h = canvas.height;
+            const half = h / 2;
+            const squarePoints = [[mx - half, 0], [mx + half, 0], [mx + half, h], [mx - half, h]];
             state.polygons.push(new Polygon(squarePoints, 'pink', null));
         });
 
@@ -480,7 +473,7 @@
         }
 
         function render() {
-            ctx.clearRect(0, 0, W, H);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save(); 
             if (state.screenGlitch > 0) {
                 state.screenGlitch--;
@@ -489,30 +482,26 @@
             }
             
             state.polygons.forEach(p => p.draw());
+            
             state.cracks.forEach(c => c.draw());
 
             if (state.screenGlitch > 0) {
                 if (Math.random() > 0.5) {
                     ctx.globalCompositeOperation = 'difference';
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; 
-                    ctx.fillRect(0, 0, W, H);
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
                     ctx.globalCompositeOperation = 'source-over'; 
                 } else if (Math.random() > 0.7) {
                     ctx.fillStyle = 'rgba(255, 0, 158, 0.15)'; 
-                    ctx.fillRect(0, 0, W, H);
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
             }
             ctx.restore(); 
-            
-            // 🌟 物理屏幕撕裂特效：因为 ctx 被 scale 放大了，所以这里需要在物理像素空间截取
             if (state.screenGlitch > 0 && Math.random() > 0.3) {
-                ctx.save();
-                ctx.setTransform(1, 0, 0, 1, 0, 0); // 重置到物理像素系
                 const sliceY = Math.random() * canvas.height;
-                const sliceH = (Math.random() * 8 + 2) * dpr; 
-                const offset = (Math.random() - 0.5) * 40 * dpr;
+                const sliceH = Math.random() * 8 + 2; 
+                const offset = (Math.random() - 0.5) * 40;
                 ctx.drawImage(canvas, 0, sliceY, canvas.width, sliceH, offset, sliceY, canvas.width, sliceH);
-                ctx.restore();
             }
             requestAnimationFrame(render);
         }
