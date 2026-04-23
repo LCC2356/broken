@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO - 1/10 局部切片版</title>
+    <title>FRACTURE PRO - 随机四边形切割版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #333; z-index: 10; }
@@ -19,7 +19,7 @@
 <body>
 
     <div class="toolbar">
-        <div style="font-weight:900; font-size:14px; color:#fff; margin-right:10px">ZONE_FRACTURE_1/10</div>
+        <div style="font-weight:900; font-size:14px; color:#fff; margin-right:10px">QUAD_FRACTURE_PRO</div>
         <div class="control-group">
             <label>故障概率</label>
             <input type="range" id="ctrlIntensity" min="0" max="100" value="85">
@@ -30,7 +30,7 @@
             <input type="range" id="ctrlLineWidth" min="1" max="10" value="2">
             <span id="valLineWidth">2</span>
         </div>
-        <button id="btnClear">REBOOT</button>
+        <button id="btnClear">REBOOT SYSTEM</button>
     </div>
 
     <div class="workspace">
@@ -44,7 +44,7 @@
         let state = {
             intensity: 0.85,
             lineWidth: 2,
-            impactWidth: 200, // 2000 / 10 = 200px
+            impactWidth: 200, 
             polygons: [] 
         };
 
@@ -114,21 +114,49 @@
             return inside;
         }
 
-        // 核心逻辑：垂直切割多边形
-        function sliceVertical(polyPoints, x) {
+        /**
+         * 核心：斜向切割函数
+         * xBase: 直线在 my 高度时的 x 坐标
+         * angleDeg: 偏离垂直线的角度 (度)
+         */
+        function sliceByAngledLine(polyPoints, xBase, my, angleDeg) {
             let left = [], right = [];
+            const angleRad = angleDeg * Math.PI / 180;
+            const tanA = Math.tan(angleRad);
+
+            // 直线方程: x = xBase + (y - my) * tanA
+            const getSide = (p) => {
+                const lineX = xBase + (p[1] - my) * tanA;
+                return p[0] - lineX;
+            };
+
             for (let i = 0; i < polyPoints.length; i++) {
                 let p1 = polyPoints[i];
                 let p2 = polyPoints[(i + 1) % polyPoints.length];
 
-                if (p1[0] < x) left.push(p1);
+                let side1 = getSide(p1);
+                let side2 = getSide(p2);
+
+                if (side1 < 0) left.push(p1);
                 else right.push(p1);
 
-                if ((p1[0] < x && p2[0] >= x) || (p1[0] >= x && p2[0] < x)) {
-                    let ratio = (x - p1[0]) / (p2[0] - p1[0]);
-                    let intersectY = p1[1] + (p2[1] - p1[1]) * ratio;
-                    left.push([x, intersectY]);
-                    right.push([x, intersectY]);
+                if ((side1 < 0 && side2 >= 0) || (side1 >= 0 && side2 < 0)) {
+                    // 求交点
+                    // 解方程组：
+                    // 1. x = p1.x + t * (p2.x - p1.x)
+                    // 2. y = p1.y + t * (p2.y - p1.y)
+                    // 3. x = xBase + (y - my) * tanA
+                    
+                    const dx = p2[0] - p1[0];
+                    const dy = p2[1] - p1[1];
+                    // 代入：p1.x + t*dx = xBase + (p1.y + t*dy - my) * tanA
+                    // t * (dx - dy * tanA) = xBase - p1.x + (p1.y - my) * tanA
+                    const t = (xBase - p1[0] + (p1[1] - my) * tanA) / (dx - dy * tanA);
+                    
+                    const ix = p1[0] + t * dx;
+                    const iy = p1[1] + t * dy;
+                    left.push([ix, iy]);
+                    right.push([ix, iy]);
                 }
             }
             return [left, right];
@@ -139,34 +167,35 @@
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-            const xMin = mx - state.impactWidth / 2;
-            const xMax = mx + state.impactWidth / 2;
+            // 随机生成 30-45 度的左右边界角
+            const angleLeft = 30 + Math.random() * 15;   // 30~45 度
+            const angleRight = -(30 + Math.random() * 15); // -30~-45 度
+
+            const xLeftBase = mx - state.impactWidth / 2;
+            const xRightBase = mx + state.impactWidth / 2;
 
             for (let i = state.polygons.length - 1; i >= 0; i--) {
                 const target = state.polygons[i];
                 if (isPointInPoly([mx, my], target.points)) {
                     
-                    // 1. 如果多边形很大，先进行带状切割
-                    let pts = target.points;
-                    let leftResult = sliceVertical(pts, xMin);
+                    // 1. 先切出左侧
+                    let [part1, partRest] = sliceByAngledLine(target.points, xLeftBase, my, angleLeft);
                     
-                    if (leftResult[0].length > 2 && leftResult[1].length > 2) {
-                        let rightResult = sliceVertical(leftResult[1], xMax);
+                    if (part1.length > 2 && partRest.length > 2) {
+                        // 2. 在剩余部分切出右侧
+                        let [centerQuad, part2] = sliceByAngledLine(partRest, xRightBase, my, angleRight);
                         
-                        if (rightResult[0].length > 2) {
-                            // rightResult[0] 就是我们要碎裂的 1/10 区域
-                            shatter(rightResult[0], mx, my);
+                        if (centerQuad.length > 2) {
+                            // 碎裂中间的不规则四边形区域
+                            shatter(centerQuad, mx, my);
                             
-                            // 保存未碎裂的左右两侧
                             state.polygons.splice(i, 1);
-                            if (leftResult[0].length > 2) state.polygons.push(new Polygon(leftResult[0], 'none'));
-                            if (rightResult[1].length > 2) state.polygons.push(new Polygon(rightResult[1], 'none'));
+                            if (part1.length > 2) state.polygons.push(new Polygon(part1, 'none'));
+                            if (part2.length > 2) state.polygons.push(new Polygon(part2, 'none'));
                         } else {
-                            // 如果已经在窄带内，直接碎裂
                             shatter(target.points, mx, my, i);
                         }
                     } else {
-                        // 兜底：直接碎裂
                         shatter(target.points, mx, my, i);
                     }
                     break;
@@ -184,7 +213,7 @@
                 const edgeX = p1[0] + (p2[0] - p1[0]) * ratio;
                 const edgeY = p1[1] + (p2[1] - p1[1]) * ratio;
 
-                const type1 = Math.random() < state.intensity ? (Math.random() > 0.5 ? 'glitch' : 'black') : 'none';
+                const type1 = Math.random() < state.intensity ? (Math.random() > 0.4 ? 'glitch' : 'black') : 'none';
                 newPolys.push(new Polygon([p1, [edgeX, edgeY], [mx, my]], type1));
 
                 const type2 = Math.random() < state.intensity * 0.4 ? 'black' : 'none';
