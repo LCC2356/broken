@@ -2,62 +2,34 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>屏幕破碎实验室 - DELAUNAY 专业版</title>
-    <script src="https://unpkg.com/delaunator@5.0.0/delaunator.min.js"></script>
+    <title>FRACTURE PRO - 非对称深度故障版</title>
     <style>
         body, html { 
             margin: 0; padding: 0; background-color: #111; color: #eee; 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            font-family: 'Inter', system-ui, sans-serif; 
             height: 100vh; display: flex; flex-direction: column; overflow: hidden;
             user-select: none;
         }
-        
-        /* 顶部控制台 */
         .toolbar { 
             background-color: #222; padding: 10px 20px; display: flex; gap: 15px; 
-            align-items: center; border-bottom: 1px solid #000; box-shadow: 0 4px 15px rgba(0,0,0,0.8); 
-            z-index: 10; flex-wrap: wrap;
+            align-items: center; border-bottom: 1px solid #000; z-index: 10;
         }
-        
-        .branding { font-weight: 900; color: #fff; letter-spacing: 1px; margin-right: 10px; font-size: 16px;}
-        
+        .branding { font-weight: 900; color: #fff; font-size: 14px; margin-right: 10px; letter-spacing: 1px;}
         .control-group { 
             display: flex; align-items: center; gap: 8px; background: #1a1a1a; 
-            padding: 5px 10px; border-radius: 6px; border: 1px solid #333;
+            padding: 5px 10px; border-radius: 4px; border: 1px solid #333;
         }
-        .control-group label { font-size: 12px; color: #ccc; min-width: 50px;}
-        .control-group span { font-size: 11px; color: #74ff06; width: 25px; text-align: right;}
-        
-        input[type="range"] { cursor: pointer; width: 80px; accent-color: #74ff06; }
-        
+        .control-group label { font-size: 11px; color: #888; text-transform: uppercase;}
+        .control-group span { font-size: 11px; color: #74ff06; width: 30px; text-align: right; font-family: monospace;}
+        input[type="range"] { cursor: pointer; width: 70px; accent-color: #74ff06; }
         button { 
             background-color: #333; border: 1px solid #555; color: #fff; 
-            padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; transition: 0.2s; 
+            padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: bold;
         }
-        button:hover { background-color: #444; border-color: #74ff06;}
-        button.danger { background-color: #520000; border-color: #ff0000; color: #ff9999; }
-        
-        .workspace { 
-            flex: 1; display: flex; justify-content: center; align-items: center; 
-            background-color: #0a0a0a; overflow: auto; padding: 40px;
-        }
-        
-        .canvas-container { 
-            box-shadow: 0 0 40px rgba(116, 255, 6, 0.15); 
-            border: 2px solid #333; 
-        }
-        
-        canvas { 
-            display: block; 
-            background-color: #74ff06; 
-            cursor: crosshair; 
-        }
-        
-        .status-bar { 
-            background-color: #111; padding: 4px 20px; font-size: 11px; color: #888; 
-            border-top: 1px solid #222; display: flex; justify-content: space-between;
-        }
-        .status-highlight { color: #74ff06; font-weight: bold; }
+        button:hover { background-color: #444; border-color: #74ff06; }
+        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #050505; padding: 20px; overflow: auto;}
+        canvas { background-color: #74ff06; cursor: crosshair; image-rendering: pixelated; }
+        .status-bar { background-color: #111; padding: 5px 20px; font-size: 10px; color: #555; display: flex; justify-content: space-between;}
     </style>
 </head>
 <body>
@@ -66,41 +38,33 @@
         <div class="branding">FRACTURE PRO</div>
         
         <div class="control-group">
-            <label>引擎模式</label>
-            <span style="width:auto; color:#fff; font-size:12px;">Delaunay Geometric</span>
-        </div>
-
-        <div class="control-group">
             <label>线宽</label>
-            <input type="range" id="ctrlLineWidth" min="1" max="10" step="1" value="2">
+            <input type="range" id="ctrlLineWidth" min="1" max="10" value="2">
             <span id="valLineWidth">2</span>
         </div>
 
         <div class="control-group">
-            <label>强度</label>
-            <input type="range" id="ctrlIntensity" min="0" max="1" step="0.05" value="0.7">
-            <span id="valIntensity">0.7</span>
+            <label>故障密度</label>
+            <input type="range" id="ctrlDensity" min="1" max="100" value="85">
+            <span id="valDensity">85</span>
         </div>
 
         <div class="control-group">
-            <label>碎片密度</label>
-            <input type="range" id="ctrlDensity" min="20" max="300" step="10" value="100">
-            <span id="valDensity">100</span>
+            <label>随机抖动</label>
+            <input type="range" id="ctrlJitter" min="0" max="100" value="40">
+            <span id="valJitter">40</span>
         </div>
         
-        <button id="btnRandom">随机化生成</button>
-        <button id="btnClear" class="danger">重置</button>
+        <button id="btnClear" style="color:#ff5555">RESET</button>
     </div>
 
     <div class="workspace">
-        <div class="canvas-container">
-            <canvas id="mainCanvas" width="2000" height="100"></canvas>
-        </div>
+        <canvas id="mainCanvas" width="2000" height="100"></canvas>
     </div>
 
     <div class="status-bar">
-        <span id="statusText">系统就绪：Delaunay 引擎已加载。</span>
-        <span>破裂点：<span id="strikeCount" class="status-highlight">0</span> | 画布: 20:1</span>
+        <span>MODE: NON_ASYMMETRIC_LCD_LEAKAGE | CANVAS: 2000 x 100</span>
+        <span>STRIKES: <span id="strikeCount" style="color:#74ff06">0</span> | BG: #74FF06</span>
     </div>
 
     <script>
@@ -109,139 +73,179 @@
         const strikeCountDisplay = document.getElementById('strikeCount');
         
         let state = {
-            intensity: 0.7,
-            density: 100,
+            density: 0.85,
             lineWidth: 2,
+            jitter: 0.4,
             strikes: [] 
         };
 
-        // UI 事件绑定
-        document.getElementById('ctrlIntensity').oninput = e => {
-            state.intensity = parseFloat(e.target.value);
-            document.getElementById('valIntensity').innerText = state.intensity.toFixed(1);
-        };
+        // UI 绑定
         document.getElementById('ctrlDensity').oninput = e => {
-            state.density = parseInt(e.target.value);
-            document.getElementById('valDensity').innerText = state.density;
+            state.density = e.target.value / 100;
+            document.getElementById('valDensity').innerText = e.target.value;
         };
         document.getElementById('ctrlLineWidth').oninput = e => {
             state.lineWidth = parseInt(e.target.value);
-            document.getElementById('valLineWidth').innerText = state.lineWidth;
+            document.getElementById('valLineWidth').innerText = e.target.value;
+        };
+        document.getElementById('ctrlJitter').oninput = e => {
+            state.jitter = e.target.value / 100;
+            document.getElementById('valJitter').innerText = e.target.value;
+        };
+        document.getElementById('btnClear').onclick = () => {
+            state.strikes = [];
+            strikeCountDisplay.innerText = 0;
         };
 
-        // ----------------------------------------------------
-        // Delaunay 几何引擎
-        // ----------------------------------------------------
         function generateStrike(originX, originY) {
-            const points = [];
-            const numPoints = state.density;
-            const impactRadius = 300; 
-
-            // 中心核心点
-            points.push([originX, originY]);
-
-            for(let i = 0; i < numPoints; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                // 平方根分布确保中心密集
-                const dist = Math.pow(Math.random(), 0.5) * impactRadius;
-                
-                // 针对 20:1 画布进行纵向拉伸适配
-                const px = originX + Math.cos(angle) * dist * 1.2;
-                const py = originY + Math.sin(angle) * dist * 0.8;
-                
-                points.push([px, py]);
-            }
-
-            const delaunay = Delaunator.from(points);
-            const triangleIndices = delaunay.triangles;
             const shards = [];
+            const rayCount = 18;
+            const maxH = canvas.height;
+            // 环半径设计：非对称。
+            // [内部小环, 漏液核心, 漏液边缘, 最外部贯穿环]
+            // [0, 漏液核心半径, 漏液边缘半径, 画布高度]
+            const rings = [
+                0,
+                {x: 10 + Math.random() * 5, y: h * 0.1},
+                {x: h * 0.15 + Math.random() * h * 0.1, y: h * 0.5},
+                {x: h * 0.2 + Math.random() * h * 0.1, y: h * 0.8},
+                {x: h * 1.5, y: h * 1.5}
+            ];
 
-            for (let i = 0; i < triangleIndices.length; i += 3) {
-                const p1 = points[triangleIndices[i]];
-                const p2 = points[triangleIndices[i + 1]];
-                const p3 = points[triangleIndices[i + 2]];
-                
-                const poly = [{x: p1[0], y: p1[1]}, {x: p2[0], y: p2[1]}, {x: p3[0], y: p3[1]}];
-                
-                const centerX = (p1[0] + p2[0] + p3[0]) / 3;
-                const distToStrike = Math.abs(centerX - originX);
+            const angles = [];
+            for(let i=0; i<rayCount; i++) {
+                angles.push((Math.PI * 2 / rayCount) * i + (Math.random() * 0.2 - 0.1));
+            }
+            angles.sort();
 
-                let type = 'none';
-                const rand = Math.random();
-                if (distToStrike < 15) type = 'black'; 
-                else if (distToStrike < 180 && rand < state.intensity) type = 'glitch';
-                else if (rand < 0.05) type = 'black';
-
-                shards.push({ polygon: poly, type });
+            const vertices = [];
+            for (let r = 0; r < rings.length; r++) {
+                const ringVertices = [];
+                for (let a = 0; a < rayCount; a++) {
+                    const radius = rings[r];
+                    // 非对称拉伸几何实现：
+                    // X 轴和 Y 轴采用不同的拉伸因子。
+                    ringVertices.push({
+                        x: originX + Math.cos(angles[a]) * radius * 0.8,
+                        y: originY + Math.sin(angles[a]) * radius
+                    });
+                }
+                vertices.push(ringVertices);
             }
 
-            return { x: originX, y: originY, shards };
+            for (let r = 0; r < rings.length - 1; r++) {
+                for (let a = 0; a < rayCount; a++) {
+                    const nextA = (a + 1) % rayCount;
+                    const poly = [vertices[r][a], vertices[r+1][a], vertices[r+1][nextA], vertices[r][nextA]];
+                    
+                    let type = 'none';
+                    const rand = Math.random();
+                    // 故障类型分配
+                    if (r <= 2) {
+                        type = rand > 0.4 ? 'glitchLines' : 'black';
+                    } else if (r <= 3 && rand > 0.2) {
+                        type = 'leakageGlitch';
+                    } else if (r <= 4 && rand > 0.6) {
+                        type = 'glitchLines';
+                    }
+
+                    shards.push({ polygon: poly, type: type, ringIndex: r });
+                }
+            }
+            return { x: originX, y: originY, shards: shards };
         }
 
-        // ----------------------------------------------------
-        // 渲染管线
-        // ----------------------------------------------------
-        function drawGlitchLines(shard) {
+        function drawVerticalGlitch(shard) {
             let minX = Infinity, maxX = -Infinity;
             shard.polygon.forEach(p => { if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x; });
-            
+
             const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
+            // state.lineWidth 的基础，但应用于不规则宽度
             const w = state.lineWidth;
             
             for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
-                if (Math.random() < 0.75) {
+                if (Math.random() < state.density) {
                     ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
-                    ctx.fillRect(x, 0, w, canvas.height); 
+                    const xOffset = (Math.random() - 0.5) * (state.jitter * 40);
+                    // 故障线条始终填满画板高度 (100px)
+                    ctx.fillRect(x + xOffset, 0, w, canvas.height); 
+                }
+            }
+        }
+
+        // 针对新的非对称区域的不规则故障线生成
+        function drawUnregularGlitch(shard) {
+            let minX = Infinity, maxX = -Infinity;
+            shard.polygon.forEach(p => { if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x; });
+
+            const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00'];
+            // state.lineWidth 的基础，但应用于不规则宽度和长度
+            const baseW = state.lineWidth;
+            
+            for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += baseW * 1.5) {
+                if (Math.random() < state.density) {
+                    ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+                    // 不规则宽度
+                    const width = baseW * (1 + (Math.random() - 0.5) * state.jitter * 2);
+                    // 不规则长度和垂直偏移
+                    const height = canvas.height * (0.1 + Math.random() * 0.9);
+                    const yOffset = (canvas.height - height) * Math.random();
+                    const xOffset = (Math.random() - 0.5) * (state.jitter * 40);
+                    ctx.fillRect(x + xOffset, yOffset, width, height); 
                 }
             }
         }
 
         function render() {
-            // 背景色 #74ff06
+            // 背景色填充为 #74ff06
             ctx.fillStyle = '#74ff06';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             state.strikes.forEach(strike => {
-                // 绘制填充层
                 strike.shards.forEach(shard => {
                     if (shard.type === 'none') return;
 
                     ctx.save();
                     ctx.beginPath();
                     ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
-                    ctx.lineTo(shard.polygon[1].x, shard.polygon[1].y);
-                    ctx.lineTo(shard.polygon[2].x, shard.polygon[2].y);
+                    for(let i=1; i<shard.polygon.length; i++) ctx.lineTo(shard.polygon[i].x, shard.polygon[i].y);
                     ctx.closePath();
                     ctx.clip(); 
 
                     if (shard.type === 'black') {
                         ctx.fillStyle = '#000';
                         ctx.fill();
-                    } else if (shard.type === 'glitch') {
+                    } else if (shard.type === 'glitchLines') {
+                        // 故障区域底色深黑，解决中心不故障问题
                         ctx.fillStyle = '#000';
                         ctx.fill();
-                        drawGlitchLines(shard);
+                        drawVerticalGlitch(shard);
+                    } else if (shard.type === 'leakageGlitch') {
+                        // 漏液区域底色深黑
+                        ctx.fillStyle = '#000';
+                        ctx.fill();
+                        drawUnregularGlitch(shard);
                     }
+                    
+                    // 撞击点核心白光增强
+                    if (shard.ringIndex === 0) {
+                        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                        ctx.fill();
+                    }
+                    
                     ctx.restore();
                 });
 
-                // 绘制几何碎裂线条 (移除圆环，保留放射几何线)
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                // 绘制细裂纹线条
+                ctx.strokeStyle = 'rgba(255,255,255,0.4)';
                 ctx.lineWidth = 0.5;
                 strike.shards.forEach(shard => {
                     ctx.beginPath();
                     ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
-                    ctx.lineTo(shard.polygon[1].x, shard.polygon[1].y);
-                    ctx.lineTo(shard.polygon[2].x, shard.polygon[2].y);
+                    for(let i=1; i<shard.polygon.length; i++) ctx.lineTo(shard.polygon[i].x, shard.polygon[i].y);
                     ctx.closePath();
                     ctx.stroke();
                 });
-
-                // 冲击中心点
-                ctx.fillStyle = '#fff';
-                ctx.beginPath();
-                ctx.arc(strike.x, strike.y, 1.5, 0, Math.PI * 2);
-                ctx.fill();
             });
 
             requestAnimationFrame(render);
@@ -258,15 +262,6 @@
             const y = (e.clientY - rect.top) * (canvas.height / rect.height);
             addStrike(x, y);
         });
-
-        document.getElementById('btnRandom').onclick = () => {
-            addStrike(Math.random() * canvas.width, Math.random() * canvas.height);
-        };
-
-        document.getElementById('btnClear').onclick = () => {
-            state.strikes = [];
-            strikeCountDisplay.innerText = 0;
-        };
 
         // 初始化
         render();
