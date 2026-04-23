@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v7.6 - 深度叠加稳定版</title>
+    <title>FRACTURE PRO v8.0 - 全局冲击叠加版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -29,7 +29,7 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v7.6</div>
+        <div class="branding">FRACTURE_v8.0</div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="0" max="15" value="2">
@@ -57,12 +57,13 @@
     <script>
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d');
+        const EPSILON = 0.01;
         
         let state = {
             density: 0.7,
             lineWidth: 2,
             isDynamic: true,
-            maxDepth: 3, 
+            impactWidth: 180, // 冲击带宽度
             polygons: [] 
         };
 
@@ -72,35 +73,38 @@
         document.getElementById('btnClear').onclick = init;
 
         class Polygon {
-            constructor(points, type = 'base', seed = null, depth = 0) {
+            constructor(points, type = 'base', seed = null) {
                 this.points = points; 
                 this.type = type; 
                 this.seed = seed !== null ? seed : Math.random();
-                this.depth = depth; 
+            }
+
+            getArea() {
+                let area = 0;
+                for (let i = 0; i < this.points.length; i++) {
+                    let j = (i + 1) % this.points.length;
+                    area += this.points[i][0] * this.points[j][1] - this.points[j][0] * this.points[i][1];
+                }
+                return Math.abs(area) / 2;
             }
 
             draw() {
                 if (this.points.length < 3) return;
                 ctx.save();
-                
                 ctx.beginPath();
                 ctx.moveTo(this.points[0][0], this.points[0][1]);
                 for (let i = 1; i < this.points.length; i++) ctx.lineTo(this.points[i][0], this.points[i][1]);
                 ctx.closePath();
 
                 if (this.type === 'base') {
-                    ctx.fillStyle = '#74ff06';
-                    ctx.fill();
+                    ctx.fillStyle = '#74ff06'; ctx.fill();
                 } else {
-                    ctx.fillStyle = '#000';
-                    ctx.fill();
-                    
+                    ctx.fillStyle = '#000'; ctx.fill();
                     if (this.type === 'glitch' && state.lineWidth > 0) {
                         ctx.save();
                         ctx.clip();
                         this.drawGlitchLines();
-                        // 💎 核心修改：仅 glitch 类型拥有渐变
-                        this.drawInnerGradient();
+                        this.drawInnerGradient(); // 只有 glitch 类型有渐变
                         ctx.restore();
                     }
                 }
@@ -116,15 +120,11 @@
             drawInnerGradient() {
                 let cx = 0, cy = 0;
                 this.points.forEach(p => { cx += p[0]; cy += p[1]; });
-                cx /= this.points.length;
-                cy /= this.points.length;
-
-                const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 70);
+                cx /= this.points.length; cy /= this.points.length;
+                const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 60);
                 grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
                 grad.addColorStop(1, 'rgba(255, 255, 255, 0.25)');
-
-                ctx.fillStyle = grad;
-                ctx.fill();
+                ctx.fillStyle = grad; ctx.fill();
             }
 
             drawGlitchLines() {
@@ -194,15 +194,7 @@
         }
 
         function init() {
-            state.polygons = [new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]], 'base', null, 0)];
-        }
-
-        function isPointInPoly(pt, poly) {
-            let x = pt[0], y = pt[1], inside = false;
-            for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-                if (((poly[i][1] > y) != (poly[j][1] > y)) && (x < (poly[j][0] - poly[i][0]) * (y - poly[i][1]) / (poly[j][1] - poly[i][1]) + poly[i][0])) inside = !inside;
-            }
-            return inside;
+            state.polygons = [new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]], 'base', null)];
         }
 
         canvas.addEventListener('mousedown', (e) => {
@@ -210,52 +202,71 @@
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
+            // 1. 生成全局冲击带边界 (0-15°)
             const angL = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 15);
             const angR = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 15);
-            const xL = mx - (30 + Math.random() * 50);
-            const xR = mx + (30 + Math.random() * 50);
-
+            const xL = mx - (40 + Math.random() * 50);
+            const xR = mx + (40 + Math.random() * 50);
             const pathL = generatePolyline(xL, my, angL);
             const pathR = generatePolyline(xR, my, angR);
 
-            for (let i = state.polygons.length - 1; i >= 0; i--) {
-                const target = state.polygons[i];
-                
-                if (isPointInPoly([mx, my], target.points)) {
-                    // 💎 核心修改：如果已达最大深度，重置该块深度，使其作为“新大碎片”被切分
-                    let currentDepth = target.depth;
-                    if (currentDepth >= state.maxDepth) {
-                        currentDepth = 0; 
-                    }
+            // 2. 💎 核心逻辑：全局遍历多边形并进行切割
+            let nextPolygons = [];
+            const currentImpactSeed = Math.random();
 
-                    let [p1, pRest] = sliceByPolyline(target.points, pathL);
-                    if (p1.length > 2 && pRest.length > 2) {
-                        let [centerQuad, p2] = sliceByPolyline(pRest, pathR);
-                        if (centerQuad.length > 2) {
-                            shatter(centerQuad, mx, my, target.seed, currentDepth + 1);
-                            state.polygons.splice(i, 1);
-                            const getSeed = (s) => Math.random() < 0.5 ? s : Math.random();
-                            state.polygons.push(new Polygon(p1, target.type, getSeed(target.seed), currentDepth + 1));
-                            state.polygons.push(new Polygon(p2, target.type, getSeed(target.seed), currentDepth + 1));
-                        } else shatter(target.points, mx, my, target.seed, currentDepth + 1, i);
-                    } else shatter(target.points, mx, my, target.seed, currentDepth + 1, i);
-                    break;
+            state.polygons.forEach(target => {
+                // 如果多边形距离点击点太远 (超过 300px)，直接保留，不参与复杂运算
+                let centerX = 0; target.points.forEach(p => centerX += p[0]); centerX /= target.points.length;
+                if (Math.abs(centerX - mx) > 350) {
+                    nextPolygons.push(target);
+                    return;
                 }
+
+                // 进行第一道切分 (左边界)
+                let [pLeft, pRest] = sliceByPolyline(target.points, pathL);
+                
+                if (pRest.length > 2) {
+                    // 进行第二道切分 (右边界)
+                    let [pMid, pRight] = sliceByPolyline(pRest, pathR);
+                    
+                    if (pMid.length > 2) {
+                        // 💎 冲击带中间的部分：进行细分 (Shatter)
+                        const subFragments = shatterToTriangles(pMid, mx, my, currentImpactSeed);
+                        nextPolygons.push(...subFragments);
+                    }
+                    
+                    if (pLeft.length > 2) nextPolygons.push(new Polygon(pLeft, target.type, target.seed));
+                    if (pRight.length > 2) nextPolygons.push(new Polygon(pRight, target.type, target.seed));
+                } else {
+                    if (pLeft.length > 2) nextPolygons.push(new Polygon(pLeft, target.type, target.seed));
+                }
+            });
+
+            // 限制多边形总数，防止性能崩溃 (超过 800 个则不再更新)
+            if (nextPolygons.length < 800) {
+                state.polygons = nextPolygons;
             }
         });
 
-        function shatter(points, mx, my, parentSeed, nextDepth, index = -1) {
-            const newPolys = [];
+        // 细分函数：将多边形切成三角形
+        function shatterToTriangles(points, mx, my, impactSeed) {
+            const results = [];
             for (let i = 0; i < points.length; i++) {
                 const p1 = points[i], p2 = points[(i + 1) % points.length];
                 const r = 0.3 + Math.random() * 0.4;
                 const mid = [p1[0] + (p2[0]-p1[0])*r, p1[1] + (p2[1]-p1[1])*r];
-                const getSeed = (s) => Math.random() < 0.5 ? s : Math.random();
-                newPolys.push(new Polygon([p1, mid, [mx, my]], Math.random() < 0.6 ? 'glitch' : 'black', getSeed(parentSeed), nextDepth));
-                newPolys.push(new Polygon([mid, p2, [mx, my]], Math.random() < 0.3 ? 'glitch' : 'black', getSeed(parentSeed), nextDepth));
+
+                // 冲击带内部产生的碎块类型：高概率彩色故障，低概率纯黑
+                const type1 = Math.random() < 0.65 ? 'glitch' : 'black';
+                const type2 = Math.random() < 0.35 ? 'glitch' : 'black';
+
+                // 内部碎块 50% 概率继承此次冲击的全局 seed，实现贯穿感
+                const getSeed = () => Math.random() < 0.5 ? impactSeed : Math.random();
+                
+                results.push(new Polygon([p1, mid, [mx, my]], type1, getSeed()));
+                results.push(new Polygon([mid, p2, [mx, my]], type2, getSeed()));
             }
-            if (index !== -1) state.polygons.splice(index, 1, ...newPolys);
-            else state.polygons.push(...newPolys);
+            return results;
         }
 
         function render() {
