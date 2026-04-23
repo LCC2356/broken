@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v8.2 - 几何优化防扭曲版</title>
+    <title>FRACTURE PRO v8.3 - 区域修正精准版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -29,7 +29,7 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v8.2</div>
+        <div class="branding">FRACTURE_v8.3</div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="0" max="15" value="2">
@@ -198,10 +198,14 @@
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-            const angL = (Math.random() - 0.5) * 30;
-            const angR = (Math.random() - 0.5) * 30;
-            const xL = mx - (40 + Math.random() * 40);
-            const xR = mx + (40 + Math.random() * 40);
+            const angL = (Math.random() - 0.5) * 20;
+            const angR = (Math.random() - 0.5) * 20;
+            
+            // 💎 优化：收窄冲击带宽，让破碎更精准
+            const halfW = 20 + Math.random() * 20; 
+            const xL = mx - halfW;
+            const xR = mx + halfW;
+            
             const pathL = generatePolyline(xL, my, angL);
             const pathR = generatePolyline(xR, my, angR);
 
@@ -211,34 +215,31 @@
             state.polygons.forEach(target => {
                 let minX = 2000, maxX = 0;
                 target.points.forEach(p => { if(p[0]<minX) minX=p[0]; if(p[0]>maxX) maxX=p[0]; });
-                // 简单的范围剔除
-                if (maxX < xL - 150 || minX > xR + 150) { nextPolys.push(target); return; }
+                
+                // 性能过滤
+                if (maxX < xL - 100 || minX > xR + 100) { nextPolys.push(target); return; }
 
                 let [pLeft, pRest] = sliceByPolyline(target.points, pathL);
                 if (pRest.length > 2) {
                     let [pMid, pRight] = sliceByPolyline(pRest, pathR);
                     if (pMid.length > 2) {
-                        // 💎 核心修改：如果是已经很碎的小块（面积 < 100），只切开，不执行向心 Shatter
-                        // 这能有效防止顶点“拧在一起”
-                        if (target.getArea() < 100) {
-                            nextPolygonsPushSimple(nextPolys, pMid, target.type, impactSeed);
+                        // 冲击带中间的部分：再次碎裂
+                        if (target.getArea() < 80) {
+                            nextPolys.push(new Polygon(pMid, target.type === 'base' ? 'glitch' : target.type, impactSeed));
                         } else {
                             nextPolys.push(...shatter(pMid, mx, my, impactSeed));
                         }
                     }
+                    // 💎 修正：左右侧严格保留原类型，防止全屏变黑
                     if (pLeft.length > 2) nextPolys.push(new Polygon(pLeft, target.type, target.seed));
-                    if (pRight.length > 2) nextPolygonsPushSimple(nextPolys, pRight, target.type, target.seed);
+                    if (pRight.length > 2) nextPolys.push(new Polygon(pRight, target.type, target.seed));
                 } else {
                     if (pLeft.length > 2) nextPolys.push(new Polygon(pLeft, target.type, target.seed));
                 }
             });
 
-            state.polygons = nextPolys.filter(p => p.getArea() > 0.3).slice(0, 1200);
+            state.polygons = nextPolys.filter(p => p.getArea() > 0.2).slice(0, 1500);
         });
-
-        function nextPolygonsPushSimple(arr, points, type, seed) {
-            arr.push(new Polygon(points, type === 'base' ? 'glitch' : type, seed));
-        }
 
         function shatter(points, mx, my, impactSeed) {
             const res = [];
@@ -247,10 +248,9 @@
                 const r = 0.3 + Math.random() * 0.4;
                 const mid = [p1[0] + (p2[0]-p1[0])*r, p1[1] + (p2[1]-p1[1])*r];
 
-                // 💎 核心修改：给撞击中心点增加随机扰动 (Impact Jitter)
-                // 这样所有的线就不会死锁在同一个像素点上
-                const jitterX = mx + (Math.random() - 0.5) * 15;
-                const jitterY = my + (Math.random() - 0.5) * 15;
+                // 💎 修复：中心点增加随机扰动，防止“拧在一起”
+                const jitterX = mx + (Math.random() - 0.5) * 20;
+                const jitterY = my + (Math.random() - 0.5) * 20;
 
                 const type1 = Math.random() < 0.7 ? 'glitch' : 'black';
                 const type2 = Math.random() < 0.4 ? 'glitch' : 'black';
