@@ -92,7 +92,7 @@
             cracks: [],
             
             crackScale: 0.10,      
-            crackThickness: 0.2,   // 🎯 初始粗细改为 0.2，带来极限纤维划痕感
+            crackThickness: 0.2,   
             blastScale: 0.05       
         };
 
@@ -102,7 +102,6 @@
         
         document.getElementById('ctrlCrackScale').oninput = e => { state.crackScale = e.target.value / 100; document.getElementById('valCrackScale').innerText = e.target.value; };
         
-        // 🎯 支持小数精度的粗细调节计算
         document.getElementById('ctrlCrackThick').oninput = e => { 
             const val = e.target.value / 10;
             state.crackThickness = val; 
@@ -163,7 +162,6 @@
                 ctx.translate(this.cx, this.cy);
                 ctx.globalAlpha = 1.0; 
 
-                // 1. 绘制核心泄露背光
                 if (state.blastScale > 0) {
                     const blastRadius = this.baseBlastRadius * state.blastScale;
                     const blastGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, blastRadius);
@@ -179,7 +177,6 @@
 
                 const scale = state.crackScale;
 
-                // 2. 绘制放射裂纹与蛛网线
                 ctx.beginPath();
                 this.rays.forEach(segments => {
                     segments.forEach(seg => {
@@ -193,11 +190,10 @@
                 });
                 
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-                ctx.lineWidth = state.crackThickness; // 🎯 这里的细微小数起作用
+                ctx.lineWidth = state.crackThickness; 
                 ctx.shadowBlur = 0; 
                 ctx.stroke();
 
-                // 3. 根部细微色散层
                 ctx.beginPath();
                 this.rays.forEach(segments => {
                      let firstSeg = segments[0];
@@ -205,7 +201,7 @@
                      ctx.lineTo(firstSeg.x2 * scale, firstSeg.y2 * scale);
                 });
                 ctx.strokeStyle = Math.random() > 0.5 ? 'rgba(0, 255, 255, 0.5)' : 'rgba(255, 0, 255, 0.5)';
-                ctx.lineWidth = state.crackThickness; // 🎯 同步亚像素粗细
+                ctx.lineWidth = state.crackThickness; 
                 ctx.globalCompositeOperation = 'screen';
                 ctx.stroke();
 
@@ -279,7 +275,9 @@
                 
                 const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
                 const w = Math.max(1, state.lineWidth);
-                const isHorizontal = this.absRandom(this.seed, 99.9) < 0.2;
+
+                // 🎯 判定方向：修改为 10% 横线，90% 竖线
+                const isHorizontal = this.absRandom(this.seed, 99.9) < 0.1; // 将阈值从0.2改为0.1
 
                 if (!isHorizontal) {
                     for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
