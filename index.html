@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO - 递归几何切割版</title>
+    <title>FRACTURE PRO - 1/10 局部切片版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #333; z-index: 10; }
@@ -19,18 +19,18 @@
 <body>
 
     <div class="toolbar">
-        <div style="font-weight:900; font-size:14px; color:#fff; margin-right:10px">SUBDIVISION_FRACTURE</div>
+        <div style="font-weight:900; font-size:14px; color:#fff; margin-right:10px">ZONE_FRACTURE_1/10</div>
         <div class="control-group">
             <label>故障概率</label>
-            <input type="range" id="ctrlIntensity" min="0" max="100" value="70">
-            <span id="valIntensity">70</span>
+            <input type="range" id="ctrlIntensity" min="0" max="100" value="85">
+            <span id="valIntensity">85</span>
         </div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="1" max="10" value="2">
             <span id="valLineWidth">2</span>
         </div>
-        <button id="btnClear">RESET CANVAS</button>
+        <button id="btnClear">REBOOT</button>
     </div>
 
     <div class="workspace">
@@ -42,21 +42,20 @@
         const ctx = canvas.getContext('2d');
         
         let state = {
-            intensity: 0.7,
+            intensity: 0.85,
             lineWidth: 2,
+            impactWidth: 200, // 2000 / 10 = 200px
             polygons: [] 
         };
 
-        // UI 绑定
         document.getElementById('ctrlIntensity').oninput = e => { state.intensity = e.target.value / 100; document.getElementById('valIntensity').innerText = e.target.value; };
         document.getElementById('ctrlLineWidth').oninput = e => { state.lineWidth = parseInt(e.target.value); document.getElementById('valLineWidth').innerText = e.target.value; };
         document.getElementById('btnClear').onclick = init;
 
-        // 多边形类
         class Polygon {
             constructor(points, type = 'none') {
-                this.points = points; // [[x,y], [x,y]...]
-                this.type = type; // 'none', 'black', 'glitch'
+                this.points = points; 
+                this.type = type; 
             }
 
             draw() {
@@ -68,7 +67,6 @@
                 }
                 ctx.closePath();
 
-                // 填充逻辑
                 if (this.type === 'black') {
                     ctx.fillStyle = '#000';
                     ctx.fill();
@@ -79,7 +77,6 @@
                     this.drawGlitchLines();
                 }
 
-                // 绘制白色的放射裂纹线
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
                 ctx.lineWidth = 0.5;
                 ctx.stroke();
@@ -100,13 +97,11 @@
         }
 
         function init() {
-            // 初始为一个完整的绿色画板
             state.polygons = [
                 new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]])
             ];
         }
 
-        // 射线法判定点是否在多边形内
         function isPointInPoly(pt, poly) {
             let x = pt[0], y = pt[1];
             let inside = false;
@@ -119,62 +114,90 @@
             return inside;
         }
 
+        // 核心逻辑：垂直切割多边形
+        function sliceVertical(polyPoints, x) {
+            let left = [], right = [];
+            for (let i = 0; i < polyPoints.length; i++) {
+                let p1 = polyPoints[i];
+                let p2 = polyPoints[(i + 1) % polyPoints.length];
+
+                if (p1[0] < x) left.push(p1);
+                else right.push(p1);
+
+                if ((p1[0] < x && p2[0] >= x) || (p1[0] >= x && p2[0] < x)) {
+                    let ratio = (x - p1[0]) / (p2[0] - p1[0]);
+                    let intersectY = p1[1] + (p2[1] - p1[1]) * ratio;
+                    left.push([x, intersectY]);
+                    right.push([x, intersectY]);
+                }
+            }
+            return [left, right];
+        }
+
         canvas.addEventListener('mousedown', (e) => {
             const rect = canvas.getBoundingClientRect();
-            const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+            const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-            // 查找点击了哪个多边形
+            const xMin = mx - state.impactWidth / 2;
+            const xMax = mx + state.impactWidth / 2;
+
             for (let i = state.polygons.length - 1; i >= 0; i--) {
-                const p = state.polygons[i];
-                if (isPointInPoly([mouseX, mouseY], p.points)) {
-                    splitPolygon(i, mouseX, mouseY);
+                const target = state.polygons[i];
+                if (isPointInPoly([mx, my], target.points)) {
+                    
+                    // 1. 如果多边形很大，先进行带状切割
+                    let pts = target.points;
+                    let leftResult = sliceVertical(pts, xMin);
+                    
+                    if (leftResult[0].length > 2 && leftResult[1].length > 2) {
+                        let rightResult = sliceVertical(leftResult[1], xMax);
+                        
+                        if (rightResult[0].length > 2) {
+                            // rightResult[0] 就是我们要碎裂的 1/10 区域
+                            shatter(rightResult[0], mx, my);
+                            
+                            // 保存未碎裂的左右两侧
+                            state.polygons.splice(i, 1);
+                            if (leftResult[0].length > 2) state.polygons.push(new Polygon(leftResult[0], 'none'));
+                            if (rightResult[1].length > 2) state.polygons.push(new Polygon(rightResult[1], 'none'));
+                        } else {
+                            // 如果已经在窄带内，直接碎裂
+                            shatter(target.points, mx, my, i);
+                        }
+                    } else {
+                        // 兜底：直接碎裂
+                        shatter(target.points, mx, my, i);
+                    }
                     break;
                 }
             }
         });
 
-        function splitPolygon(index, mx, my) {
-            const target = state.polygons[index];
-            const pts = target.points;
+        function shatter(points, mx, my, index = -1) {
             const newPolys = [];
-
-            // 对每一条边进行切割
-            for (let i = 0; i < pts.length; i++) {
-                const p1 = pts[i];
-                const p2 = (i === pts.length - 1) ? pts[0] : pts[i + 1];
-
-                // 在边上生成一个随机点 (lerp 逻辑)
-                const ratio = 0.3 + Math.random() * 0.4; // 采样边中间的一段，避免碎片太碎
+            for (let i = 0; i < points.length; i++) {
+                const p1 = points[i];
+                const p2 = points[(i + 1) % points.length];
+                
+                const ratio = 0.2 + Math.random() * 0.6;
                 const edgeX = p1[0] + (p2[0] - p1[0]) * ratio;
                 const edgeY = p1[1] + (p2[1] - p1[1]) * ratio;
 
-                // 生成新的三角形：由当前边的两个端点和鼠标点组成
-                // 或者更复杂的逻辑：当前端点、边上的采样点、鼠标点
-                // 这里参考你代码的 split 逻辑，生成碎片
-                
-                let type = 'none';
-                const rand = Math.random();
-                if (rand < state.intensity) {
-                    type = Math.random() > 0.4 ? 'glitch' : 'black';
-                }
+                const type1 = Math.random() < state.intensity ? (Math.random() > 0.5 ? 'glitch' : 'black') : 'none';
+                newPolys.push(new Polygon([p1, [edgeX, edgeY], [mx, my]], type1));
 
-                const newPoints = [p1, [edgeX, edgeY], [mx, my]];
-                newPolys.push(new Polygon(newPoints, type));
-
-                // 补全另一半三角形
-                const nextType = Math.random() < state.intensity * 0.5 ? 'black' : 'none';
-                newPolys.push(new Polygon([[edgeX, edgeY], p2, [mx, my]], nextType));
+                const type2 = Math.random() < state.intensity * 0.4 ? 'black' : 'none';
+                newPolys.push(new Polygon([[edgeX, edgeY], p2, [mx, my]], type2));
             }
 
-            // 移除旧的，加入新的
-            state.polygons.splice(index, 1, ...newPolys);
+            if (index !== -1) state.polygons.splice(index, 1, ...newPolys);
+            else state.polygons.push(...newPolys);
         }
 
         function render() {
             ctx.fillStyle = '#74ff06';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
             state.polygons.forEach(p => p.draw());
             requestAnimationFrame(render);
         }
