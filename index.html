@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v6.2 - 纹理合成增强版</title>
+    <title>FRACTURE PRO v6.3 - 极致故障版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -11,7 +11,6 @@
         .control-group label { font-size: 10px; color: #888; text-transform: uppercase; }
         .control-group span { font-size: 10px; color: #74ff06; width: 25px; text-align: right; font-family: monospace; }
         input[type="range"] { cursor: pointer; width: 60px; accent-color: #74ff06; }
-        
         .switch-group { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #888; text-transform: uppercase; margin-left: 10px;}
         .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
         .switch input { opacity: 0; width: 0; height: 0; }
@@ -19,7 +18,6 @@
         .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
         input:checked + .slider { background-color: #74ff06; }
         input:checked + .slider:before { transform: translateX(16px); }
-
         button { background: #333; border: 1px solid #555; color: #fff; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: bold; }
         button:hover { border-color: #74ff06; color: #74ff06; }
         .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #050505; padding: 20px; }
@@ -29,29 +27,22 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v6.2</div>
-        
+        <div class="branding">FRACTURE_v6.3</div>
         <div class="control-group">
-            <label>故障线宽</label>
+            <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="0" max="15" value="1">
             <span id="valLineWidth">1</span>
         </div>
-
         <div class="control-group">
             <label>密度</label>
             <input type="range" id="ctrlDensity" min="1" max="100" value="70">
             <span id="valDensity">70</span>
         </div>
-
         <div class="switch-group">
-            <label>原位闪烁</label>
-            <label class="switch">
-                <input type="checkbox" id="ctrlDynamic" checked>
-                <span class="slider"></span>
-            </label>
+            <label>闪烁</label>
+            <label class="switch"><input type="checkbox" id="ctrlDynamic" checked><span class="slider"></span></label>
         </div>
-        
-        <button id="btnClear" style="margin-left: auto;">REBOOT SYSTEM</button>
+        <button id="btnClear" style="margin-left: auto;">REBOOT</button>
     </div>
 
     <div class="workspace">
@@ -61,22 +52,18 @@
     <script>
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d');
-        const EPSILON = 0.00001;
-        
-        // 资源预加载
         const glassImg = new Image();
         glassImg.src = 'Texturelabs_Glass_145XL.jpg';
         
         let state = {
             density: 0.7,
             lineWidth: 1,
-            impactWidth: 160,
             isDynamic: true,
             polygons: [],
-            strikePoints: [] // 记录点击位置用于贴图
+            strikePoints: []
         };
 
-        // UI 绑定
+        // UI
         document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
         document.getElementById('ctrlLineWidth').oninput = e => { state.lineWidth = parseInt(e.target.value); document.getElementById('valLineWidth').innerText = e.target.value; };
         document.getElementById('ctrlDynamic').onchange = e => { state.isDynamic = e.target.checked; };
@@ -84,21 +71,16 @@
 
         class Polygon {
             constructor(points, type = 'base') {
-                this.points = points; 
-                this.type = type; 
-                this.seed = Math.random();
+                this.points = points; this.type = type; this.seed = Math.random();
             }
-
             getArea() {
                 let area = 0;
                 for (let i = 0; i < this.points.length; i++) {
                     let j = (i + 1) % this.points.length;
-                    area += this.points[i][0] * this.points[j][1];
-                    area -= this.points[j][0] * this.points[i][1];
+                    area += this.points[i][0] * this.points[j][1] - this.points[j][0] * this.points[i][1];
                 }
                 return Math.abs(area) / 2;
             }
-
             draw() {
                 if (this.points.length < 3) return;
                 ctx.save();
@@ -106,50 +88,39 @@
                 ctx.moveTo(this.points[0][0], this.points[0][1]);
                 for (let i = 1; i < this.points.length; i++) ctx.lineTo(this.points[i][0], this.points[i][1]);
                 ctx.closePath();
-
                 if (this.type === 'base') {
-                    ctx.fillStyle = '#74ff06';
-                    ctx.fill();
+                    ctx.fillStyle = '#74ff06'; ctx.fill();
                 } else {
-                    ctx.fillStyle = '#000';
-                    ctx.fill();
-                    if (this.type === 'glitch' && state.lineWidth > 0) {
-                        ctx.clip();
-                        this.drawGlitchLines();
-                    }
+                    ctx.fillStyle = '#000'; ctx.fill();
+                    if (this.type === 'glitch' && state.lineWidth > 0) { ctx.clip(); this.drawGlitchLines(); }
                 }
-
                 if (this.type !== 'base') {
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-                    ctx.lineWidth = 0.5;
-                    ctx.stroke();
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)'; ctx.lineWidth = 0.5; ctx.stroke();
                 }
                 ctx.restore();
             }
-
             drawGlitchLines() {
-                let minX = Infinity, maxX = -Infinity;
+                let minX = 2000, maxX = 0;
                 this.points.forEach(p => { if(p[0] < minX) minX = p[0]; if(p[0] > maxX) maxX = p[0]; });
-                
                 const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
-                const w = state.lineWidth;
+                
+                // 💎 关键修复：防止 w 为 0 导致的死循环
+                const w = Math.max(1, state.lineWidth); 
                 let prng = this.getPseudoRandom(this.seed);
-
                 for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
-                    const lineVal = prng(); 
+                    const lineVal = prng();
                     if (lineVal < state.density) {
                         if (state.isDynamic) {
                             const flicker = Math.random();
-                            if (flicker < 0.1) continue;
-                            if (flicker < 0.3) ctx.globalAlpha = 0.3;
+                            if (flicker < 0.15) continue;
+                            if (flicker < 0.4) ctx.globalAlpha = 0.3;
                         }
                         ctx.fillStyle = colors[Math.floor(lineVal * colors.length * 10) % colors.length];
-                        ctx.fillRect(x, 0, w, canvas.height); 
+                        ctx.fillRect(x, 0, w, canvas.height);
                         ctx.globalAlpha = 1.0;
                     }
                 }
             }
-
             getPseudoRandom(s) {
                 let m_w = (123456789 + s * 10000) & 0xffffffff;
                 let m_z = (987654321 - s * 10000) & 0xffffffff;
@@ -163,12 +134,13 @@
 
         function generatePolyline(xBase, my, angleDeg) {
             const path = [];
-            const segments = 3; 
+            const segments = 4;
             const h = canvas.height;
             const tanA = Math.tan(angleDeg * Math.PI / 180);
             for (let i = 0; i <= segments; i++) {
                 const y = (h / segments) * i;
-                const x = xBase + (y - my) * tanA + (Math.random() - 0.5) * 12;
+                // 加大随机偏折量 25px
+                const x = xBase + (y - my) * tanA + (Math.random() - 0.5) * 25;
                 path.push([x, y]);
             }
             return path;
@@ -191,12 +163,10 @@
                 let s1 = getSide(p1), s2 = getSide(p2);
                 if (s1 < 0) left.push(p1); else right.push(p1);
                 if ((s1 < 0 && s2 >= 0) || (s1 >= 0 && s2 < 0)) {
-                    const denom = Math.abs(s1) + Math.abs(s2);
-                    let t = denom < EPSILON ? 0.5 : Math.abs(s1) / denom;
+                    let t = (Math.abs(s1) + Math.abs(s2)) < 0.001 ? 0.5 : Math.abs(s1) / (Math.abs(s1) + Math.abs(s2));
                     let iy = p1[1] + (p2[1] - p1[1]) * t;
                     let ix = getXAtY(iy);
-                    left.push([ix, iy]);
-                    right.push([ix, iy]);
+                    left.push([ix, iy]); right.push([ix, iy]);
                 }
             }
             return [left, right];
@@ -219,21 +189,20 @@
             const rect = canvas.getBoundingClientRect();
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const my = (e.clientY - rect.top) * (canvas.height / rect.height);
-
-            // 记录撞击点用于贴图
             state.strikePoints.push({x: mx, y: my});
 
-            const angL = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 15);
-            const angR = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 15);
-            const xL = mx - (40 + Math.random() * 50);
-            const xR = mx + (40 + Math.random() * 50);
+            // 💎 打破梯形：增加角度和基准位置的完全随机性
+            const angL = (Math.random() - 0.5) * 60; // -30 ~ 30
+            const angR = (Math.random() - 0.5) * 60;
+            const xL = mx - (30 + Math.random() * 80);
+            const xR = mx + (30 + Math.random() * 80);
 
             const pathL = generatePolyline(xL, my, angL);
             const pathR = generatePolyline(xR, my, angR);
 
             for (let i = state.polygons.length - 1; i >= 0; i--) {
                 const target = state.polygons[i];
-                if (target.getArea() < 15) continue;
+                if (target.getArea() < 5) continue;
                 if (isPointInPoly([mx, my], target.points)) {
                     let [p1, pRest] = sliceByPolyline(target.points, pathL);
                     if (p1.length > 2 && pRest.length > 2) {
@@ -251,14 +220,14 @@
         });
 
         function shatter(points, mx, my, index = -1) {
-            if (new Polygon(points).getArea() < 8) return;
+            if (new Polygon(points).getArea() < 5) return;
             const newPolys = [];
             for (let i = 0; i < points.length; i++) {
                 const p1 = points[i], p2 = points[(i + 1) % points.length];
                 const r = 0.2 + Math.random() * 0.6;
                 const mid = [p1[0] + (p2[0]-p1[0])*r, p1[1] + (p2[1]-p1[1])*r];
-                newPolys.push(new Polygon([p1, mid, [mx, my]], Math.random() < 0.6 ? 'glitch' : 'black'));
-                newPolys.push(new Polygon([mid, p2, [mx, my]], Math.random() < 0.3 ? 'glitch' : 'black'));
+                newPolys.push(new Polygon([p1, mid, [mx, my]], Math.random() < 0.65 ? 'glitch' : 'black'));
+                newPolys.push(new Polygon([mid, p2, [mx, my]], Math.random() < 0.4 ? 'glitch' : 'black'));
             }
             if (index !== -1) state.polygons.splice(index, 1, ...newPolys);
             else state.polygons.push(...newPolys);
@@ -266,26 +235,14 @@
 
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // 1. 绘制基础多边形和故障线
             state.polygons.forEach(p => p.draw());
-
-            // 2. 💎 绘制撞击点的玻璃纹理贴图
             if (glassImg.complete) {
-                ctx.save();
-                // 使用强光混合模式
-                ctx.globalCompositeOperation = 'hard-light';
-                state.strikePoints.forEach(sp => {
-                    // 贴图大小稍微大一点以覆盖碎裂带
-                    const size = 350; 
-                    ctx.drawImage(glassImg, sp.x - size/2, sp.y - size/2, size, size);
-                });
+                ctx.save(); ctx.globalCompositeOperation = 'hard-light';
+                state.strikePoints.forEach(sp => { const s = 350; ctx.drawImage(glassImg, sp.x-s/2, sp.y-s/2, s, s); });
                 ctx.restore();
             }
-
             requestAnimationFrame(render);
         }
-
         init(); render();
     </script>
 </body>
