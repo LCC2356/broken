@@ -2,59 +2,35 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO - 非对称漏液修复版</title>
+    <title>FRACTURE PRO - 递归几何切割版</title>
     <style>
-        body, html { 
-            margin: 0; padding: 0; background-color: #111; color: #eee; 
-            font-family: 'Inter', system-ui, sans-serif; 
-            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
-            user-select: none;
-        }
-        .toolbar { 
-            background-color: #222; padding: 10px 20px; display: flex; gap: 15px; 
-            align-items: center; border-bottom: 1px solid #000; z-index: 10;
-        }
-        .branding { font-weight: 900; color: #fff; font-size: 14px; margin-right: 10px; letter-spacing: 1px;}
-        .control-group { 
-            display: flex; align-items: center; gap: 8px; background: #1a1a1a; 
-            padding: 5px 10px; border-radius: 4px; border: 1px solid #333;
-        }
-        .control-group label { font-size: 11px; color: #888; text-transform: uppercase;}
-        .control-group span { font-size: 11px; color: #74ff06; width: 30px; text-align: right; font-family: monospace;}
+        body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+        .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #333; z-index: 10; }
+        .control-group { display: flex; align-items: center; gap: 8px; background: #1a1a1a; padding: 5px 10px; border-radius: 4px; border: 1px solid #222; }
+        .control-group label { font-size: 10px; color: #888; text-transform: uppercase; }
+        .control-group span { font-size: 10px; color: #74ff06; width: 30px; text-align: right; }
         input[type="range"] { cursor: pointer; width: 70px; accent-color: #74ff06; }
-        button { 
-            background-color: #333; border: 1px solid #555; color: #fff; 
-            padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 11px; font-weight: bold;
-        }
-        button:hover { background-color: #444; border-color: #74ff06; }
-        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #050505; padding: 20px; overflow: auto;}
+        button { background: #222; border: 1px solid #444; color: #fff; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: bold; }
+        button:hover { border-color: #74ff06; color: #74ff06; }
+        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #050505; padding: 20px; }
         canvas { background-color: #74ff06; cursor: crosshair; image-rendering: pixelated; }
     </style>
 </head>
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE PRO</div>
-        
+        <div style="font-weight:900; font-size:14px; color:#fff; margin-right:10px">SUBDIVISION_FRACTURE</div>
+        <div class="control-group">
+            <label>故障概率</label>
+            <input type="range" id="ctrlIntensity" min="0" max="100" value="70">
+            <span id="valIntensity">70</span>
+        </div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="1" max="10" value="2">
             <span id="valLineWidth">2</span>
         </div>
-
-        <div class="control-group">
-            <label>故障密度</label>
-            <input type="range" id="ctrlDensity" min="1" max="100" value="85">
-            <span id="valDensity">85</span>
-        </div>
-
-        <div class="control-group">
-            <label>随机抖动</label>
-            <input type="range" id="ctrlJitter" min="0" max="100" value="40">
-            <span id="valJitter">40</span>
-        </div>
-        
-        <button id="btnClear" style="color:#ff5555">RESET</button>
+        <button id="btnClear">RESET CANVAS</button>
     </div>
 
     <div class="workspace">
@@ -66,149 +42,144 @@
         const ctx = canvas.getContext('2d');
         
         let state = {
-            density: 0.85,
+            intensity: 0.7,
             lineWidth: 2,
-            jitter: 0.4,
-            strikes: [] 
+            polygons: [] 
         };
 
         // UI 绑定
-        document.getElementById('ctrlDensity').oninput = e => {
-            state.density = e.target.value / 100;
-            document.getElementById('valDensity').innerText = e.target.value;
-        };
-        document.getElementById('ctrlLineWidth').oninput = e => {
-            state.lineWidth = parseInt(e.target.value);
-            document.getElementById('valLineWidth').innerText = e.target.value;
-        };
-        document.getElementById('ctrlJitter').oninput = e => {
-            state.jitter = e.target.value / 100;
-            document.getElementById('valJitter').innerText = e.target.value;
-        };
-        document.getElementById('btnClear').onclick = () => {
-            state.strikes = [];
-        };
+        document.getElementById('ctrlIntensity').oninput = e => { state.intensity = e.target.value / 100; document.getElementById('valIntensity').innerText = e.target.value; };
+        document.getElementById('ctrlLineWidth').oninput = e => { state.lineWidth = parseInt(e.target.value); document.getElementById('valLineWidth').innerText = e.target.value; };
+        document.getElementById('btnClear').onclick = init;
 
-        function generateStrike(originX, originY) {
-            const shards = [];
-            const rayCount = 12; // 减少射线数量，使单块面积变大，更“完整”
-            const h = canvas.height;
-            // 定义破碎半径序列，增加外部跨度
-            const rings = [0, 15, 40, 100, 300, 800];
-
-            const angles = [];
-            for(let i=0; i<rayCount; i++) {
-                // 角度分布更不规则，模拟真实撞击的非对称
-                angles.push((Math.PI * 2 / rayCount) * i + (Math.random() * 0.4 - 0.2));
+        // 多边形类
+        class Polygon {
+            constructor(points, type = 'none') {
+                this.points = points; // [[x,y], [x,y]...]
+                this.type = type; // 'none', 'black', 'glitch'
             }
-            angles.sort();
 
-            const vertices = [];
-            for (let r = 0; r < rings.length; r++) {
-                const ringVertices = [];
-                for (let a = 0; a < rayCount; a++) {
-                    const radius = rings[r];
-                    // 核心逻辑：Y 轴强行拉伸，X 轴略微偏移，形成长条状破裂
-                    const offsetX = (Math.random() - 0.5) * radius * 0.1;
-                    ringVertices.push({
-                        x: originX + Math.cos(angles[a]) * radius * 0.7 + offsetX,
-                        y: originY + Math.sin(angles[a]) * radius * 1.5 
-                    });
+            draw() {
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(this.points[0][0], this.points[0][1]);
+                for (let i = 1; i < this.points.length; i++) {
+                    ctx.lineTo(this.points[i][0], this.points[i][1]);
                 }
-                vertices.push(ringVertices);
-            }
+                ctx.closePath();
 
-            for (let r = 0; r < rings.length - 1; r++) {
-                for (let a = 0; a < rayCount; a++) {
-                    const nextA = (a + 1) % rayCount;
-                    const poly = [vertices[r][a], vertices[r+1][a], vertices[r+1][nextA], vertices[r][nextA]];
-                    
-                    let type = 'none';
-                    const rand = Math.random();
-                    // 增加中心核心区的范围（r <= 2）
-                    if (r <= 1) {
-                        type = rand > 0.3 ? 'black' : 'glitchLines';
-                    } else if (r === 2) {
-                        type = rand > 0.2 ? 'glitchLines' : 'black';
-                    } else if (r === 3 && rand > 0.5) {
-                        type = 'glitchLines';
-                    }
-
-                    shards.push({ polygon: poly, type, ringIndex: r });
+                // 填充逻辑
+                if (this.type === 'black') {
+                    ctx.fillStyle = '#000';
+                    ctx.fill();
+                } else if (this.type === 'glitch') {
+                    ctx.clip();
+                    ctx.fillStyle = '#000';
+                    ctx.fill();
+                    this.drawGlitchLines();
                 }
-            }
-            return { x: originX, y: originY, shards };
-        }
 
-        function drawVerticalGlitch(shard) {
-            let minX = Infinity, maxX = -Infinity;
-            shard.polygon.forEach(p => { if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x; });
-
-            const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
-            const w = state.lineWidth;
-            
-            for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
-                if (Math.random() < state.density) {
-                    ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
-                    const xOffset = (Math.random() - 0.5) * (state.jitter * 30);
-                    // 故障线条始终填满画板高度
-                    ctx.fillRect(x + xOffset, 0, w, canvas.height); 
-                }
-            }
-        }
-
-        function render() {
-            ctx.fillStyle = '#74ff06'; // 亮绿色背景
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            state.strikes.forEach(strike => {
-                strike.shards.forEach(shard => {
-                    if (shard.type === 'none') return;
-
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
-                    for(let i=1; i<shard.polygon.length; i++) ctx.lineTo(shard.polygon[i].x, shard.polygon[i].y);
-                    ctx.closePath();
-                    ctx.clip(); 
-
-                    if (shard.type === 'black') {
-                        ctx.fillStyle = '#000';
-                        ctx.fill();
-                    } else if (shard.type === 'glitchLines') {
-                        ctx.fillStyle = '#000';
-                        ctx.fill();
-                        drawVerticalGlitch(shard);
-                    }
-                    
-                    if (shard.ringIndex === 0) {
-                        ctx.fillStyle = 'rgba(255,255,255,0.3)';
-                        ctx.fill();
-                    }
-                    ctx.restore();
-                });
-
-                // 绘制裂纹白线
-                ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                // 绘制白色的放射裂纹线
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
                 ctx.lineWidth = 0.5;
-                strike.shards.forEach(shard => {
-                    ctx.beginPath();
-                    ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
-                    for(let i=1; i<shard.polygon.length; i++) ctx.lineTo(shard.polygon[i].x, shard.polygon[i].y);
-                    ctx.stroke();
-                });
-            });
+                ctx.stroke();
+                ctx.restore();
+            }
 
-            requestAnimationFrame(render);
+            drawGlitchLines() {
+                let minX = Infinity, maxX = -Infinity;
+                this.points.forEach(p => { if(p[0] < minX) minX = p[0]; if(p[0] > maxX) maxX = p[0]; });
+                const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
+                for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += state.lineWidth) {
+                    if (Math.random() < 0.8) {
+                        ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+                        ctx.fillRect(x, 0, state.lineWidth, canvas.height); 
+                    }
+                }
+            }
+        }
+
+        function init() {
+            // 初始为一个完整的绿色画板
+            state.polygons = [
+                new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]])
+            ];
+        }
+
+        // 射线法判定点是否在多边形内
+        function isPointInPoly(pt, poly) {
+            let x = pt[0], y = pt[1];
+            let inside = false;
+            for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+                let xi = poly[i][0], yi = poly[i][1];
+                let xj = poly[j][0], yj = poly[j][1];
+                let intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
         }
 
         canvas.addEventListener('mousedown', (e) => {
             const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-            state.strikes.push(generateStrike(x, y));
+            const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+            // 查找点击了哪个多边形
+            for (let i = state.polygons.length - 1; i >= 0; i--) {
+                const p = state.polygons[i];
+                if (isPointInPoly([mouseX, mouseY], p.points)) {
+                    splitPolygon(i, mouseX, mouseY);
+                    break;
+                }
+            }
         });
 
+        function splitPolygon(index, mx, my) {
+            const target = state.polygons[index];
+            const pts = target.points;
+            const newPolys = [];
+
+            // 对每一条边进行切割
+            for (let i = 0; i < pts.length; i++) {
+                const p1 = pts[i];
+                const p2 = (i === pts.length - 1) ? pts[0] : pts[i + 1];
+
+                // 在边上生成一个随机点 (lerp 逻辑)
+                const ratio = 0.3 + Math.random() * 0.4; // 采样边中间的一段，避免碎片太碎
+                const edgeX = p1[0] + (p2[0] - p1[0]) * ratio;
+                const edgeY = p1[1] + (p2[1] - p1[1]) * ratio;
+
+                // 生成新的三角形：由当前边的两个端点和鼠标点组成
+                // 或者更复杂的逻辑：当前端点、边上的采样点、鼠标点
+                // 这里参考你代码的 split 逻辑，生成碎片
+                
+                let type = 'none';
+                const rand = Math.random();
+                if (rand < state.intensity) {
+                    type = Math.random() > 0.4 ? 'glitch' : 'black';
+                }
+
+                const newPoints = [p1, [edgeX, edgeY], [mx, my]];
+                newPolys.push(new Polygon(newPoints, type));
+
+                // 补全另一半三角形
+                const nextType = Math.random() < state.intensity * 0.5 ? 'black' : 'none';
+                newPolys.push(new Polygon([[edgeX, edgeY], p2, [mx, my]], nextType));
+            }
+
+            // 移除旧的，加入新的
+            state.polygons.splice(index, 1, ...newPolys);
+        }
+
+        function render() {
+            ctx.fillStyle = '#74ff06';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            state.polygons.forEach(p => p.draw());
+            requestAnimationFrame(render);
+        }
+
+        init();
         render();
     </script>
 </body>
