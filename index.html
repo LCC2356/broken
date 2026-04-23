@@ -1,438 +1,183 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>20:1 破裂屏幕效果</title>
-  <style>
-    :root {
-      --bg: #18ff18;
-      --panel: rgba(5, 5, 5, 0.65);
-      --text: #e9ffe9;
-      --accent: #63ff63;
-    }
-
-    html,
-    body {
-      margin: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #020902;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "PingFang SC", sans-serif;
-    }
-
-    .app {
-      width: 100%;
-      height: 100%;
-      display: grid;
-      grid-template-rows: auto 1fr;
-    }
-
-    .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      padding: 10px 14px;
-      background: var(--panel);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      color: var(--text);
-      z-index: 2;
-    }
-
-    .title {
-      font-weight: 700;
-      font-size: 13px;
-      margin-right: 4px;
-      color: var(--accent);
-      letter-spacing: 0.4px;
-    }
-
-    .ctrl {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.09);
-      border-radius: 8px;
-      padding: 6px 10px;
-      font-size: 12px;
-    }
-
-    .ctrl label {
-      opacity: 0.92;
-      font-size: 12px;
-    }
-
-    .ctrl input[type='range'] {
-      width: 120px;
-      accent-color: #6bff6b;
-      cursor: pointer;
-    }
-
-    .ctrl .val {
-      width: 40px;
-      text-align: right;
-      color: #afffaf;
-      font-variant-numeric: tabular-nums;
-    }
-
-    button {
-      height: 32px;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      background: rgba(255, 255, 255, 0.05);
-      color: var(--text);
-      border-radius: 8px;
-      padding: 0 12px;
-      cursor: pointer;
-    }
-
-    button:hover {
-      border-color: #6fff6f;
-    }
-
-    .stage {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      height: 100%;
-      padding: 16px;
-      box-sizing: border-box;
-    }
-
-    canvas {
-      width: min(98vw, calc((100vh - 90px) * 20));
-      height: calc(min(98vw, calc((100vh - 90px) * 20)) / 20);
-      background: var(--bg);
-      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      cursor: crosshair;
-    }
-
-    .hint {
-      margin-left: auto;
-      font-size: 12px;
-      opacity: 0.85;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>FRACTURE PRO - Delaunay Geometric Edition</title>
+    <script src="https://unpkg.com/delaunator@5.0.0/delaunator.min.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+        .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #333; z-index: 10; }
+        .control-group { display: flex; align-items: center; gap: 8px; background: #1a1a1a; padding: 5px 10px; border-radius: 4px; border: 1px solid #222; }
+        .control-group label { font-size: 10px; color: #888; text-transform: uppercase; }
+        .control-group span { font-size: 10px; color: #74ff06; width: 30px; text-align: right; }
+        input[type="range"] { cursor: pointer; width: 70px; accent-color: #74ff06; }
+        button { background: #222; border: 1px solid #444; color: #fff; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: bold; }
+        button:hover { border-color: #74ff06; color: #74ff06; }
+        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #050505; padding: 20px; }
+        canvas { background-color: #74ff06; cursor: crosshair; image-rendering: pixelated; }
+    </style>
 </head>
 <body>
-  <div class="app">
+
     <div class="toolbar">
-      <span class="title">BROKEN-SCREEN 20:1</span>
-      <div class="ctrl">
-        <label for="lineSize">故障线尺寸</label>
-        <input id="lineSize" type="range" min="1" max="8" value="2" />
-        <span class="val" id="lineSizeVal">2</span>
-      </div>
-      <div class="ctrl">
-        <label for="lineDensity">故障线分布</label>
-        <input id="lineDensity" type="range" min="5" max="100" value="45" />
-        <span class="val" id="lineDensityVal">45%</span>
-      </div>
-      <button id="resetBtn">清空</button>
-      <span class="hint">点击画板制造玻璃破裂 · 按 R 重置</span>
+        <div style="font-weight:900; font-size:14px; color:#fff; margin-right:10px">DELAUNAY_FRACTURE</div>
+        <div class="control-group">
+            <label>碎片数量</label>
+            <input type="range" id="ctrlDensity" min="20" max="200" value="80">
+            <span id="valDensity">80</span>
+        </div>
+        <div class="control-group">
+            <label>故障强度</label>
+            <input type="range" id="ctrlIntensity" min="1" max="100" value="70">
+            <span id="valIntensity">70</span>
+        </div>
+        <button id="btnClear">RESET SYSTEM</button>
     </div>
-    <div class="stage">
-      <canvas id="screen"></canvas>
+
+    <div class="workspace">
+        <canvas id="mainCanvas" width="2000" height="100"></canvas>
     </div>
-  </div>
 
-  <script>
-    const canvas = document.getElementById('screen');
-    const ctx = canvas.getContext('2d');
-    const lineSizeEl = document.getElementById('lineSize');
-    const lineDensityEl = document.getElementById('lineDensity');
-    const lineSizeVal = document.getElementById('lineSizeVal');
-    const lineDensityVal = document.getElementById('lineDensityVal');
-    const resetBtn = document.getElementById('resetBtn');
+    <script>
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let state = {
+            density: 80,
+            intensity: 0.7,
+            strikes: [] 
+        };
 
-    const cracks = [];
-    let width = 0;
-    let height = 0;
-    let dpr = 1;
+        document.getElementById('ctrlDensity').oninput = e => { state.density = parseInt(e.target.value); document.getElementById('valDensity').innerText = e.target.value; };
+        document.getElementById('ctrlIntensity').oninput = e => { state.intensity = e.target.value / 100; document.getElementById('valIntensity').innerText = e.target.value; };
+        document.getElementById('btnClear').onclick = () => state.strikes = [];
 
-    const state = {
-      bg: '#18ff18',
-      glitchLineSize: Number(lineSizeEl.value),
-      glitchDensity: Number(lineDensityEl.value) / 100,
-      sharedLines: []
-    };
+        function generateStrike(originX, originY) {
+            const points = [];
+            const numPoints = state.density;
+            const impactRadius = 250; // 冲击影响范围
 
-    function rand(min, max) {
-      return min + Math.random() * (max - min);
-    }
+            // 1. 生成随机种子点
+            // 冲击中心强制放一个点
+            points.push([originX, originY]);
 
-    function resizeCanvas() {
-      const rect = canvas.getBoundingClientRect();
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
-      width = Math.max(1, Math.floor(rect.width));
-      height = Math.max(1, Math.floor(rect.height));
-      canvas.width = Math.floor(width * dpr);
-      canvas.height = Math.floor(height * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      rebuildSharedGlitchLines();
-    }
+            for(let i = 0; i < numPoints; i++) {
+                // 采用极坐标分布，中心密集，外围疏散
+                const angle = Math.random() * Math.PI * 2;
+                // 模拟冲击波：距离越远点越稀
+                const dist = Math.pow(Math.random(), 0.5) * impactRadius;
+                
+                // 针对 2000x100 的比例，我们在 Y 轴上做适当的拉伸以覆盖全高度
+                const px = originX + Math.cos(angle) * dist * 1.2;
+                const py = originY + Math.sin(angle) * dist * 0.8;
+                
+                points.push([px, py]);
+            }
 
-    function rebuildSharedGlitchLines() {
-      const lines = [];
-      const colors = ['#ff2b2b', '#2b7fff', '#ff00ef', '#00f7ff', '#ffffff', '#faff00'];
-      const step = Math.max(1, state.glitchLineSize);
-      for (let x = 0; x < width; x += step) {
-        if (Math.random() < state.glitchDensity) {
-          lines.push({
-            x,
-            w: Math.max(1, Math.round(step * rand(0.8, 1.8))),
-            alpha: rand(0.18, 0.62),
-            color: colors[Math.floor(rand(0, colors.length))]
-          });
+            // 2. 调用 Delaunator 进行三角剖分
+            const delaunay = Delaunator.from(points);
+            const triangleIndices = delaunay.triangles;
+            const shards = [];
+
+            // 3. 提取三角形并分类
+            for (let i = 0; i < triangleIndices.length; i += 3) {
+                const p1 = points[triangleIndices[i]];
+                const p2 = points[triangleIndices[i + 1]];
+                const p3 = points[triangleIndices[i + 2]];
+                
+                const poly = [{x: p1[0], y: p1[1]}, {x: p2[0], y: p2[1]}, {x: p3[0], y: p3[1]}];
+                
+                // 计算重心到原点的距离决定损坏类型
+                const centerX = (p1[0] + p2[0] + p3[0]) / 3;
+                const distToStrike = Math.abs(centerX - originX);
+
+                let type = 'none';
+                const rand = Math.random();
+                if (distToStrike < 20) type = 'black'; // 撞击核心区
+                else if (distToStrike < 150 && rand < state.intensity) type = 'glitch'; // 故障扩散区
+                else if (rand < 0.1) type = 'black'; // 零星坏块
+
+                shards.push({ polygon: poly, type });
+            }
+
+            return { x: originX, y: originY, shards };
         }
-      }
-      state.sharedLines = lines;
-    }
 
-    function rgbaFromHex(hex, alpha) {
-      const value = hex.replace('#', '');
-      const r = parseInt(value.slice(0, 2), 16);
-      const g = parseInt(value.slice(2, 4), 16);
-      const b = parseInt(value.slice(4, 6), 16);
-      return `rgba(${r},${g},${b},${alpha})`;
-    }
-
-    function makeGlassCrack(cx, cy) {
-      const rays = Math.floor(rand(14, 24));
-      const maxR = Math.min(width, height) * rand(0.38, 0.62);
-      const ringCount = 4;
-
-      const angles = [];
-      let angle = rand(0, Math.PI * 2);
-      for (let i = 0; i < rays; i++) {
-        angle += (Math.PI * 2) / rays + rand(-0.08, 0.08);
-        angles.push(angle);
-      }
-
-      const rings = [];
-      for (let r = 1; r <= ringCount; r++) {
-        const baseRadius = (maxR * r) / ringCount;
-        rings.push(baseRadius);
-      }
-
-      const vertices = rings.map((radius, ringIdx) =>
-        angles.map((a) => {
-          const deform = ringIdx === 0 ? rand(0.9, 1.05) : rand(0.82, 1.2);
-          const bend = Math.sin(a * 3 + ringIdx) * radius * 0.03;
-          return {
-            x: cx + Math.cos(a) * radius * deform + bend,
-            y: cy + Math.sin(a) * radius * deform + bend * 0.35
-          };
-        })
-      );
-
-      const shards = [];
-      for (let r = 0; r < vertices.length - 1; r++) {
-        for (let i = 0; i < angles.length; i++) {
-          const next = (i + 1) % angles.length;
-          const pieceRoll = Math.random();
-          const pieceType = pieceRoll > 0.72 ? 'void' : pieceRoll > 0.38 ? 'glitch' : 'glass';
-          shards.push({
-            poly: [vertices[r][i], vertices[r + 1][i], vertices[r + 1][next], vertices[r][next]],
-            type: pieceType,
-            ring: r
-          });
+        function drawGlitchLines(shard) {
+            let minX = Infinity, maxX = -Infinity;
+            shard.polygon.forEach(p => { if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x; });
+            
+            const colors = ['#FF0000', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
+            const w = 2; // 线宽固定为 2 效果较好
+            
+            for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
+                if (Math.random() < 0.7) {
+                    ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+                    ctx.fillRect(x, 0, w, canvas.height); 
+                }
+            }
         }
-      }
 
-      const branchCracks = [];
-      angles.forEach((a, idx) => {
-        const out = vertices[vertices.length - 1][idx];
-        const branchLen = rand(14, 50);
-        if (Math.random() > 0.25) {
-          branchCracks.push({
-            x1: out.x,
-            y1: out.y,
-            x2: out.x + Math.cos(a + rand(-0.65, 0.65)) * branchLen,
-            y2: out.y + Math.sin(a + rand(-0.65, 0.65)) * branchLen,
-            alpha: rand(0.2, 0.5)
-          });
+        function render() {
+            // 背景绿色 #74ff06
+            ctx.fillStyle = '#74ff06';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            state.strikes.forEach(strike => {
+                // 第一遍：绘制所有填充（黑屏区和故障区）
+                strike.shards.forEach(shard => {
+                    if (shard.type === 'none') return;
+
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
+                    ctx.lineTo(shard.polygon[1].x, shard.polygon[1].y);
+                    ctx.lineTo(shard.polygon[2].x, shard.polygon[2].y);
+                    ctx.closePath();
+                    ctx.clip(); 
+
+                    if (shard.type === 'black') {
+                        ctx.fillStyle = '#000';
+                        ctx.fill();
+                    } else if (shard.type === 'glitch') {
+                        ctx.fillStyle = '#000';
+                        ctx.fill();
+                        drawGlitchLines(shard);
+                    }
+                    ctx.restore();
+                });
+
+                // 第二遍：绘制纯粹的几何碎裂线（三角形边缘）
+                // 只有放射状和交叉的裂纹，没有圆环
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+                ctx.lineWidth = 0.5;
+                strike.shards.forEach(shard => {
+                    ctx.beginPath();
+                    ctx.moveTo(shard.polygon[0].x, shard.polygon[0].y);
+                    ctx.lineTo(shard.polygon[1].x, shard.polygon[1].y);
+                    ctx.lineTo(shard.polygon[2].x, shard.polygon[2].y);
+                    ctx.closePath();
+                    ctx.stroke();
+                });
+
+                // 冲击中心点微光
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.beginPath();
+                ctx.arc(strike.x, strike.y, 2, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            requestAnimationFrame(render);
         }
-      });
 
-      return { cx, cy, angles, vertices, shards, branchCracks };
-    }
-
-    function clipPolygon(poly) {
-      ctx.beginPath();
-      ctx.moveTo(poly[0].x, poly[0].y);
-      for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
-      ctx.closePath();
-      ctx.clip();
-    }
-
-    function drawSharedGlitchLines() {
-      for (const line of state.sharedLines) {
-        ctx.fillStyle = rgbaFromHex(line.color, line.alpha);
-        ctx.fillRect(line.x, 0, line.w, height);
-      }
-    }
-
-    function drawShard(shard) {
-      const poly = shard.poly;
-      let minX = Infinity;
-      let maxX = -Infinity;
-      let minY = Infinity;
-      let maxY = -Infinity;
-      for (const p of poly) {
-        minX = Math.min(minX, p.x);
-        minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x);
-        maxY = Math.max(maxY, p.y);
-      }
-
-      ctx.save();
-      clipPolygon(poly);
-
-      if (shard.type === 'void') {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.94)';
-        ctx.fillRect(minX - 2, minY - 2, maxX - minX + 4, maxY - minY + 4);
-      } else if (shard.type === 'glitch') {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.90)';
-        ctx.fillRect(minX - 2, minY - 2, maxX - minX + 4, maxY - minY + 4);
-        drawSharedGlitchLines();
-
-        for (let y = minY; y <= maxY; y += rand(2, 5)) {
-          if (Math.random() > 0.55) {
-            ctx.fillStyle = `rgba(255,255,255,${rand(0.06, 0.25)})`;
-            ctx.fillRect(minX, y, maxX - minX, 1);
-          }
-        }
-      } else {
-        const g = ctx.createLinearGradient(minX, minY, maxX, maxY);
-        g.addColorStop(0, 'rgba(255,255,255,0.03)');
-        g.addColorStop(0.45, 'rgba(255,255,255,0.20)');
-        g.addColorStop(1, 'rgba(255,255,255,0.04)');
-        ctx.fillStyle = g;
-        ctx.fillRect(minX - 2, minY - 2, maxX - minX + 4, maxY - minY + 4);
-      }
-
-      ctx.restore();
-    }
-
-    function drawGlassLines(crack) {
-      const outer = crack.vertices[crack.vertices.length - 1];
-      const mid = crack.vertices[1];
-
-      ctx.strokeStyle = 'rgba(240,245,255,0.78)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (const p of outer) {
-        ctx.moveTo(crack.cx, crack.cy);
-        ctx.lineTo(p.x, p.y);
-      }
-      ctx.stroke();
-
-      ctx.strokeStyle = 'rgba(210,230,255,0.34)';
-      ctx.lineWidth = 0.75;
-      ctx.beginPath();
-      for (let i = 0; i < outer.length; i++) {
-        const next = (i + 1) % outer.length;
-        if (Math.random() > 0.24) {
-          ctx.moveTo(mid[i].x, mid[i].y);
-          ctx.lineTo(outer[next].x, outer[next].y);
-        }
-      }
-      ctx.stroke();
-
-      // 环裂纹（更像玻璃冲击裂）
-      ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-      ctx.lineWidth = 0.6;
-      crack.vertices.forEach((ring, idx) => {
-        if (idx === crack.vertices.length - 1) return;
-        ctx.beginPath();
-        ring.forEach((p, i) => {
-          if (i === 0) ctx.moveTo(p.x, p.y);
-          else ctx.lineTo(p.x, p.y);
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+            state.strikes.push(generateStrike(x, y));
         });
-        ctx.closePath();
-        ctx.stroke();
-      });
 
-      // 外圈分支细裂纹
-      ctx.strokeStyle = 'rgba(250,255,255,0.38)';
-      ctx.lineWidth = 0.55;
-      ctx.beginPath();
-      crack.branchCracks.forEach((b) => {
-        ctx.moveTo(b.x1, b.y1);
-        ctx.lineTo(b.x2, b.y2);
-      });
-      ctx.stroke();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(crack.cx, crack.cy, 1.7, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    function drawGlobalGlitchOverlay() {
-      drawSharedGlitchLines();
-      for (let y = 0; y < height; y += 3) {
-        if (Math.random() > 0.88) {
-          ctx.fillStyle = `rgba(255,255,255,${rand(0.02, 0.08)})`;
-          ctx.fillRect(0, y, width, 1);
-        }
-      }
-    }
-
-    function render() {
-      ctx.fillStyle = state.bg;
-      ctx.fillRect(0, 0, width, height);
-
-      cracks.forEach((crack) => {
-        crack.shards.forEach(drawShard);
-        drawGlassLines(crack);
-      });
-
-      if (cracks.length) {
-        drawGlobalGlitchOverlay();
-      }
-
-      requestAnimationFrame(render);
-    }
-
-    canvas.addEventListener('pointerdown', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      cracks.push(makeGlassCrack(x, y));
-      if (cracks.length > 20) cracks.shift();
-    });
-
-    lineSizeEl.addEventListener('input', () => {
-      state.glitchLineSize = Number(lineSizeEl.value);
-      lineSizeVal.textContent = String(state.glitchLineSize);
-      rebuildSharedGlitchLines();
-    });
-
-    lineDensityEl.addEventListener('input', () => {
-      state.glitchDensity = Number(lineDensityEl.value) / 100;
-      lineDensityVal.textContent = `${lineDensityEl.value}%`;
-      rebuildSharedGlitchLines();
-    });
-
-    resetBtn.addEventListener('click', () => {
-      cracks.length = 0;
-    });
-
-    window.addEventListener('keydown', (e) => {
-      if (e.key.toLowerCase() === 'r') cracks.length = 0;
-    });
-
-    window.addEventListener('resize', resizeCanvas);
-
-    lineSizeVal.textContent = lineSizeEl.value;
-    lineDensityVal.textContent = `${lineDensityEl.value}%`;
-    resizeCanvas();
-    render();
-  </script>
+        render();
+    </script>
 </body>
 </html>
