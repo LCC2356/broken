@@ -91,38 +91,37 @@
         document.getElementById('ctrlDoubleStrike').onchange = e => { state.isDoubleStrike = e.target.checked; }; 
         document.getElementById('btnClear').onclick = init;
 
-        // 💎 新版：高度还原真实屏幕碎裂的硬朗射线与背光漏光
+        // 💎 极致微调：静止爆点与 1px 微缩放射裂纹
         class CrackNode {
             constructor(cx, cy) {
                 this.cx = cx;
                 this.cy = cy;
                 this.rays = [];
-                this.webLines = []; // 蜘蛛网状的次级连接线
+                this.webLines = []; 
 
                 // 1. 生成放射状主裂纹 (15到25条射线)
                 const numRays = 15 + Math.floor(Math.random() * 10);
                 for(let i=0; i<numRays; i++) {
                     const angle = (i / numRays) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
-                    // 屏幕裂纹通常可以延伸得很长
-                    const length = (canvas.height * 0.5) + Math.random() * 500; 
+                    // 🎯 长度严格缩小 80% (* 0.2)
+                    const length = ((canvas.height * 0.5) + Math.random() * 500) * 0.2; 
                     
                     let currentX = 0, currentY = 0;
                     let segments = [];
-                    // 将长射线分成几段，产生轻微的不规则折线感
                     let segCount = 4 + Math.floor(Math.random() * 4);
                     let rayAngle = angle;
                     
                     for(let j=0; j<segCount; j++) {
                         let r = length / segCount;
-                        rayAngle += (Math.random() - 0.5) * 0.15; // 每次延伸偏转极小角度
+                        rayAngle += (Math.random() - 0.5) * 0.15; 
                         let nextX = currentX + Math.cos(rayAngle) * r;
                         let nextY = currentY + Math.sin(rayAngle) * r;
                         segments.push({x1: currentX, y1: currentY, x2: nextX, y2: nextY});
                         
-                        // 随机在段与段之间生成横向的次级“蛛网”连接线
+                        // 次级蛛网线也等比例缩小 80%
                         if (j > 0 && Math.random() > 0.6) {
                             const webAngle = rayAngle + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2) + (Math.random()-0.5)*0.2;
-                            const webLen = 10 + Math.random() * 30;
+                            const webLen = (10 + Math.random() * 30) * 0.2; 
                             this.webLines.push({
                                 x1: currentX, y1: currentY, 
                                 x2: currentX + Math.cos(webAngle)*webLen, 
@@ -141,16 +140,11 @@
                 ctx.save();
                 ctx.translate(this.cx, this.cy);
                 
-                // 动态故障闪烁
-                if (state.isDynamic) {
-                    const flicker = Math.random();
-                    if (flicker < 0.05) ctx.globalAlpha = 0.3;
-                    else if (flicker < 0.15) ctx.globalAlpha = 0.7;
-                    else ctx.globalAlpha = 1.0;
-                }
+                // 🎯 强制去除闪烁，保持完全静止的物理裂痕质感
+                ctx.globalAlpha = 1.0;
 
-                // 1. 绘制核心泄露背光 (白亮渐变圈)
-                const blastRadius = 30 + Math.random() * 20;
+                // 1. 绘制核心泄露背光 (白亮圈) - 🎯 严格缩小 95% (* 0.05)
+                const blastRadius = (30 + Math.random() * 20) * 0.05;
                 const blastGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, blastRadius);
                 blastGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
                 blastGradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.9)');
@@ -174,17 +168,13 @@
                     ctx.lineTo(web.x2, web.y2);
                 });
                 
-                // 设置白色硬朗线条，加入一点点辉光
+                // 🎯 严格锁定 1px，并去除所有外发光虚化(shadowBlur)
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
                 ctx.lineWidth = 1;
-                ctx.shadowBlur = 4;
-                ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+                ctx.shadowBlur = 0; 
                 ctx.stroke();
-                
-                // 清除阴影防止影响其他渲染
-                ctx.shadowBlur = 0;
 
-                // 3. 根部细微色散光晕 (模拟液晶漏液的光学折射)
+                // 3. 根部细微色散层 
                 ctx.beginPath();
                 this.rays.forEach(segments => {
                      let firstSeg = segments[0];
@@ -192,7 +182,8 @@
                      ctx.lineTo(firstSeg.x2, firstSeg.y2);
                 });
                 ctx.strokeStyle = Math.random() > 0.5 ? 'rgba(0, 255, 255, 0.5)' : 'rgba(255, 0, 255, 0.5)';
-                ctx.lineWidth = 2;
+                // 🎯 色散层也锁定 1px
+                ctx.lineWidth = 1; 
                 ctx.globalCompositeOperation = 'screen';
                 ctx.stroke();
 
@@ -443,7 +434,6 @@
             
             state.polygons.forEach(p => p.draw());
             
-            // 渲染硬朗的物理屏幕裂纹层
             state.cracks.forEach(c => c.draw());
 
             if (state.screenGlitch > 0) {
