@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v6.1 - 稳定性增强版</title>
+    <title>FRACTURE PRO v6.2 - 纹理合成增强版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -29,12 +29,12 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v6.1</div>
+        <div class="branding">FRACTURE_v6.2</div>
         
         <div class="control-group">
-            <label>线宽</label>
-            <input type="range" id="ctrlLineWidth" min="1" max="15" value="2">
-            <span id="valLineWidth">2</span>
+            <label>故障线宽</label>
+            <input type="range" id="ctrlLineWidth" min="0" max="15" value="1">
+            <span id="valLineWidth">1</span>
         </div>
 
         <div class="control-group">
@@ -63,14 +63,20 @@
         const ctx = canvas.getContext('2d');
         const EPSILON = 0.00001;
         
+        // 资源预加载
+        const glassImg = new Image();
+        glassImg.src = 'Texturelabs_Glass_145XL.jpg';
+        
         let state = {
             density: 0.7,
-            lineWidth: 2,
+            lineWidth: 1,
             impactWidth: 160,
             isDynamic: true,
-            polygons: [] 
+            polygons: [],
+            strikePoints: [] // 记录点击位置用于贴图
         };
 
+        // UI 绑定
         document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
         document.getElementById('ctrlLineWidth').oninput = e => { state.lineWidth = parseInt(e.target.value); document.getElementById('valLineWidth').innerText = e.target.value; };
         document.getElementById('ctrlDynamic').onchange = e => { state.isDynamic = e.target.checked; };
@@ -107,7 +113,7 @@
                 } else {
                     ctx.fillStyle = '#000';
                     ctx.fill();
-                    if (this.type === 'glitch') {
+                    if (this.type === 'glitch' && state.lineWidth > 0) {
                         ctx.clip();
                         this.drawGlitchLines();
                     }
@@ -132,14 +138,11 @@
                 for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
                     const lineVal = prng(); 
                     if (lineVal < state.density) {
-                        // 💎 核心修改：真正的原位闪烁
-                        // 线条位置固定，但通过随机性控制每帧的显示状态
                         if (state.isDynamic) {
                             const flicker = Math.random();
-                            if (flicker < 0.1) continue; // 10% 概率完全消失
-                            if (flicker < 0.3) ctx.globalAlpha = 0.3; // 20% 概率变暗
+                            if (flicker < 0.1) continue;
+                            if (flicker < 0.3) ctx.globalAlpha = 0.3;
                         }
-                        
                         ctx.fillStyle = colors[Math.floor(lineVal * colors.length * 10) % colors.length];
                         ctx.fillRect(x, 0, w, canvas.height); 
                         ctx.globalAlpha = 1.0;
@@ -182,18 +185,13 @@
                 }
                 return path[0][0];
             };
-
             const getSide = (p) => p[0] - getXAtY(p[1]);
-
             for (let i = 0; i < polyPoints.length; i++) {
                 let p1 = polyPoints[i], p2 = polyPoints[(i + 1) % polyPoints.length];
                 let s1 = getSide(p1), s2 = getSide(p2);
-
                 if (s1 < 0) left.push(p1); else right.push(p1);
-
                 if ((s1 < 0 && s2 >= 0) || (s1 >= 0 && s2 < 0)) {
                     const denom = Math.abs(s1) + Math.abs(s2);
-                    // 💎 安全检查：防止除零
                     let t = denom < EPSILON ? 0.5 : Math.abs(s1) / denom;
                     let iy = p1[1] + (p2[1] - p1[1]) * t;
                     let ix = getXAtY(iy);
@@ -206,6 +204,7 @@
 
         function init() {
             state.polygons = [new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]], 'base')];
+            state.strikePoints = [];
         }
 
         function isPointInPoly(pt, poly) {
@@ -221,7 +220,9 @@
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-            // 💎 核心修改：角度调整为 0-15 度
+            // 记录撞击点用于贴图
+            state.strikePoints.push({x: mx, y: my});
+
             const angL = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 15);
             const angR = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 15);
             const xL = mx - (40 + Math.random() * 50);
@@ -232,9 +233,7 @@
 
             for (let i = state.polygons.length - 1; i >= 0; i--) {
                 const target = state.polygons[i];
-                // 💎 安全检查：如果目标碎片已经太小，不再进行切割
-                if (target.getArea() < 20) continue;
-
+                if (target.getArea() < 15) continue;
                 if (isPointInPoly([mx, my], target.points)) {
                     let [p1, pRest] = sliceByPolyline(target.points, pathL);
                     if (p1.length > 2 && pRest.length > 2) {
@@ -252,10 +251,7 @@
         });
 
         function shatter(points, mx, my, index = -1) {
-            const tempPoly = new Polygon(points);
-            // 💎 安全检查：防止无限细分极小多边形
-            if (tempPoly.getArea() < 10) return;
-
+            if (new Polygon(points).getArea() < 8) return;
             const newPolys = [];
             for (let i = 0; i < points.length; i++) {
                 const p1 = points[i], p2 = points[(i + 1) % points.length];
@@ -270,7 +266,23 @@
 
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 1. 绘制基础多边形和故障线
             state.polygons.forEach(p => p.draw());
+
+            // 2. 💎 绘制撞击点的玻璃纹理贴图
+            if (glassImg.complete) {
+                ctx.save();
+                // 使用强光混合模式
+                ctx.globalCompositeOperation = 'hard-light';
+                state.strikePoints.forEach(sp => {
+                    // 贴图大小稍微大一点以覆盖碎裂带
+                    const size = 350; 
+                    ctx.drawImage(glassImg, sp.x - size/2, sp.y - size/2, size, size);
+                });
+                ctx.restore();
+            }
+
             requestAnimationFrame(render);
         }
 
