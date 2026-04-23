@@ -32,8 +32,8 @@
         <div class="branding">FRACTURE_v8.2</div>
         <div class="control-group">
             <label>线宽</label>
-            <input type="range" id="ctrlLineWidth" min="0" max="15" value="1">
-            <span id="valLineWidth">1</span>
+            <input type="range" id="ctrlLineWidth" min="1" max="150" value="10">
+            <span id="valLineWidth">1.0</span>
         </div>
         <div class="control-group">
             <label>密度</label>
@@ -82,7 +82,7 @@
         
         let state = {
             density: 0.15, 
-            lineWidth: 1,
+            lineWidth: 1.0, // 🎯 初始线宽改为浮点数
             isDynamic: true,
             isDoubleStrike: false, 
             isCracksEnabled: true, 
@@ -96,18 +96,16 @@
             blastScale: 0.05       
         };
 
-        // 事件监听器
-        document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
-        document.getElementById('ctrlLineWidth').oninput = e => { state.lineWidth = parseInt(e.target.value); document.getElementById('valLineWidth').innerText = e.target.value; };
-        
-        document.getElementById('ctrlCrackScale').oninput = e => { state.crackScale = e.target.value / 100; document.getElementById('valCrackScale').innerText = e.target.value; };
-        
-        document.getElementById('ctrlCrackThick').oninput = e => { 
+        // 🎯 支持小数精度的故障线宽调节
+        document.getElementById('ctrlLineWidth').oninput = e => { 
             const val = e.target.value / 10;
-            state.crackThickness = val; 
-            document.getElementById('valCrackThick').innerText = val.toFixed(1); 
+            state.lineWidth = val; 
+            document.getElementById('valLineWidth').innerText = val.toFixed(1); 
         };
         
+        document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
+        document.getElementById('ctrlCrackScale').oninput = e => { state.crackScale = e.target.value / 100; document.getElementById('valCrackScale').innerText = e.target.value; };
+        document.getElementById('ctrlCrackThick').oninput = e => { const val = e.target.value / 10; state.crackThickness = val; document.getElementById('valCrackThick').innerText = val.toFixed(1); };
         document.getElementById('ctrlBlastScale').oninput = e => { state.blastScale = e.target.value / 100; document.getElementById('valBlastScale').innerText = e.target.value; };
 
         document.getElementById('ctrlDynamic').onchange = e => { state.isDynamic = e.target.checked; };
@@ -274,13 +272,15 @@
                 });
                 
                 const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
-                const w = Math.max(1, state.lineWidth);
-
-                // 🎯 判定方向：修改为 10% 横线，90% 竖线
-                const isHorizontal = this.absRandom(this.seed, 99.9) < 0.1; // 将阈值从0.2改为0.1
+                
+                // 🎯 核心解耦算法：保证极细线条依然能够拥有最高性能的扫描
+                const w = Math.max(0.01, state.lineWidth); // 实际物理绘制宽度，允许无限细
+                const step = Math.max(1, w); // 步进距离最低为1px，保护引擎不卡死
+                
+                const isHorizontal = this.absRandom(this.seed, 99.9) < 0.1; 
 
                 if (!isHorizontal) {
-                    for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
+                    for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += step) {
                         const noise = this.absRandom(x, this.seed);
                         if (noise < state.density) {
                             if (state.isDynamic) {
@@ -294,7 +294,7 @@
                         }
                     }
                 } else {
-                    for (let y = Math.floor(minY); y <= Math.ceil(maxY); y += w) {
+                    for (let y = Math.floor(minY); y <= Math.ceil(maxY); y += step) {
                         const noise = this.absRandom(y, this.seed + 500); 
                         if (noise < state.density) {
                             if (state.isDynamic) {
