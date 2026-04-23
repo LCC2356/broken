@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v6.0 - 不规则折线 & 信号闪烁版</title>
+    <title>FRACTURE PRO v6.1 - 稳定性增强版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -29,7 +29,7 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v6.0</div>
+        <div class="branding">FRACTURE_v6.1</div>
         
         <div class="control-group">
             <label>线宽</label>
@@ -44,14 +44,14 @@
         </div>
 
         <div class="switch-group">
-            <label>故障闪烁</label>
+            <label>原位闪烁</label>
             <label class="switch">
                 <input type="checkbox" id="ctrlDynamic" checked>
                 <span class="slider"></span>
             </label>
         </div>
         
-        <button id="btnClear" style="margin-left: auto;">REBOOT</button>
+        <button id="btnClear" style="margin-left: auto;">REBOOT SYSTEM</button>
     </div>
 
     <div class="workspace">
@@ -61,11 +61,12 @@
     <script>
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d');
+        const EPSILON = 0.00001;
         
         let state = {
             density: 0.7,
             lineWidth: 2,
-            impactWidth: 180,
+            impactWidth: 160,
             isDynamic: true,
             polygons: [] 
         };
@@ -82,7 +83,18 @@
                 this.seed = Math.random();
             }
 
+            getArea() {
+                let area = 0;
+                for (let i = 0; i < this.points.length; i++) {
+                    let j = (i + 1) % this.points.length;
+                    area += this.points[i][0] * this.points[j][1];
+                    area -= this.points[j][0] * this.points[i][1];
+                }
+                return Math.abs(area) / 2;
+            }
+
             draw() {
+                if (this.points.length < 3) return;
                 ctx.save();
                 ctx.beginPath();
                 ctx.moveTo(this.points[0][0], this.points[0][1]);
@@ -115,19 +127,20 @@
                 
                 const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
                 const w = state.lineWidth;
-                
-                // 固定使用种子来确定位置，保证闪烁时线条位置不变
                 let prng = this.getPseudoRandom(this.seed);
 
                 for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += w) {
-                    const lineSeed = prng(); 
-                    if (lineSeed < state.density) {
-                        // 💎 核心修改：动态闪烁逻辑
-                        // 如果开启动态，每帧随机改变透明度或直接跳过绘制
-                        if (state.isDynamic && Math.random() < 0.15) continue; 
+                    const lineVal = prng(); 
+                    if (lineVal < state.density) {
+                        // 💎 核心修改：真正的原位闪烁
+                        // 线条位置固定，但通过随机性控制每帧的显示状态
+                        if (state.isDynamic) {
+                            const flicker = Math.random();
+                            if (flicker < 0.1) continue; // 10% 概率完全消失
+                            if (flicker < 0.3) ctx.globalAlpha = 0.3; // 20% 概率变暗
+                        }
                         
-                        ctx.globalAlpha = (state.isDynamic && Math.random() < 0.2) ? 0.4 : 1.0;
-                        ctx.fillStyle = colors[Math.floor(lineSeed * colors.length * 10) % colors.length];
+                        ctx.fillStyle = colors[Math.floor(lineVal * colors.length * 10) % colors.length];
                         ctx.fillRect(x, 0, w, canvas.height); 
                         ctx.globalAlpha = 1.0;
                     }
@@ -145,26 +158,21 @@
             }
         }
 
-        // 💎 核心修改：生成带锚点的折线路径
         function generatePolyline(xBase, my, angleDeg) {
             const path = [];
             const segments = 3; 
             const h = canvas.height;
             const tanA = Math.tan(angleDeg * Math.PI / 180);
-            
             for (let i = 0; i <= segments; i++) {
                 const y = (h / segments) * i;
-                // 基础位置 + 倾斜偏移 + 随机偏折(Deflection)
-                const x = xBase + (y - my) * tanA + (Math.random() - 0.5) * 15;
+                const x = xBase + (y - my) * tanA + (Math.random() - 0.5) * 12;
                 path.push([x, y]);
             }
             return path;
         }
 
-        // 💎 核心修改：基于折线路径的切割函数
         function sliceByPolyline(polyPoints, path) {
             let left = [], right = [];
-            
             const getXAtY = (y) => {
                 for (let i = 0; i < path.length - 1; i++) {
                     if (y >= path[i][1] && y <= path[i+1][1]) {
@@ -184,8 +192,10 @@
                 if (s1 < 0) left.push(p1); else right.push(p1);
 
                 if ((s1 < 0 && s2 >= 0) || (s1 >= 0 && s2 < 0)) {
-                    // 简化处理：求 y 轴交点。由于折线是垂直分布的，我们分段找交点
-                    let iy = p1[1] + (p2[1] - p1[1]) * (Math.abs(s1) / (Math.abs(s1) + Math.abs(s2)));
+                    const denom = Math.abs(s1) + Math.abs(s2);
+                    // 💎 安全检查：防止除零
+                    let t = denom < EPSILON ? 0.5 : Math.abs(s1) / denom;
+                    let iy = p1[1] + (p2[1] - p1[1]) * t;
                     let ix = getXAtY(iy);
                     left.push([ix, iy]);
                     right.push([ix, iy]);
@@ -198,37 +208,6 @@
             state.polygons = [new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]], 'base')];
         }
 
-        canvas.addEventListener('mousedown', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const my = (e.clientY - rect.top) * (canvas.height / rect.height);
-
-            const xL = mx - (40 + Math.random() * 60);
-            const xR = mx + (40 + Math.random() * 60);
-            const angL = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 30);
-            const angR = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 30);
-
-            // 生成折线边界
-            const pathL = generatePolyline(xL, my, angL);
-            const pathR = generatePolyline(xR, my, angR);
-
-            for (let i = state.polygons.length - 1; i >= 0; i--) {
-                const target = state.polygons[i];
-                if (isPointInPoly([mx, my], target.points)) {
-                    let [p1, pRest] = sliceByPolyline(target.points, pathL);
-                    if (p1.length > 2 && pRest.length > 2) {
-                        let [centerQuad, p2] = sliceByPolyline(pRest, pathR);
-                        if (centerQuad.length > 2) {
-                            shatter(centerQuad, mx, my);
-                            state.polygons.splice(i, 1);
-                            state.polygons.push(new Polygon(p1, target.type), new Polygon(p2, target.type));
-                        } else shatter(target.points, mx, my, i);
-                    } else shatter(target.points, mx, my, i);
-                    break;
-                }
-            }
-        });
-
         function isPointInPoly(pt, poly) {
             let x = pt[0], y = pt[1], inside = false;
             for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -237,7 +216,46 @@
             return inside;
         }
 
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+            // 💎 核心修改：角度调整为 0-15 度
+            const angL = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 15);
+            const angR = (Math.random() > 0.5 ? 1 : -1) * (Math.random() * 15);
+            const xL = mx - (40 + Math.random() * 50);
+            const xR = mx + (40 + Math.random() * 50);
+
+            const pathL = generatePolyline(xL, my, angL);
+            const pathR = generatePolyline(xR, my, angR);
+
+            for (let i = state.polygons.length - 1; i >= 0; i--) {
+                const target = state.polygons[i];
+                // 💎 安全检查：如果目标碎片已经太小，不再进行切割
+                if (target.getArea() < 20) continue;
+
+                if (isPointInPoly([mx, my], target.points)) {
+                    let [p1, pRest] = sliceByPolyline(target.points, pathL);
+                    if (p1.length > 2 && pRest.length > 2) {
+                        let [centerQuad, p2] = sliceByPolyline(pRest, pathR);
+                        if (centerQuad.length > 2) {
+                            shatter(centerQuad, mx, my);
+                            state.polygons.splice(i, 1);
+                            if (p1.length > 2) state.polygons.push(new Polygon(p1, target.type));
+                            if (p2.length > 2) state.polygons.push(new Polygon(p2, target.type));
+                        } else shatter(target.points, mx, my, i);
+                    } else shatter(target.points, mx, my, i);
+                    break;
+                }
+            }
+        });
+
         function shatter(points, mx, my, index = -1) {
+            const tempPoly = new Polygon(points);
+            // 💎 安全检查：防止无限细分极小多边形
+            if (tempPoly.getArea() < 10) return;
+
             const newPolys = [];
             for (let i = 0; i < points.length; i++) {
                 const p1 = points[i], p2 = points[(i + 1) % points.length];
