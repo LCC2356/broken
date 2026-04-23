@@ -48,6 +48,13 @@
             </label>
         </div>
         <div class="switch-group">
+            <label>装饰裂纹</label>
+            <label class="switch">
+                <input type="checkbox" id="ctrlCracks" checked>
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="switch-group">
             <label>双击</label>
             <label class="switch">
                 <input type="checkbox" id="ctrlDoubleStrike">
@@ -69,17 +76,84 @@
             density: 0.15, 
             lineWidth: 1,
             isDynamic: true,
-            isDoubleStrike: false, // 🎯 新增：双击状态位
+            isDoubleStrike: false, 
+            isCracksEnabled: true, // 🎯 装饰性裂纹开关状态
             impactWidth: 160,
             screenGlitch: 0, 
-            polygons: [] 
+            polygons: [],
+            cracks: [] // 🎯 独立存储裂纹的数组
         };
 
         document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
         document.getElementById('ctrlLineWidth').oninput = e => { state.lineWidth = parseInt(e.target.value); document.getElementById('valLineWidth').innerText = e.target.value; };
         document.getElementById('ctrlDynamic').onchange = e => { state.isDynamic = e.target.checked; };
-        document.getElementById('ctrlDoubleStrike').onchange = e => { state.isDoubleStrike = e.target.checked; }; // 🎯 监听双击开关
+        document.getElementById('ctrlCracks').onchange = e => { state.isCracksEnabled = e.target.checked; };
+        document.getElementById('ctrlDoubleStrike').onchange = e => { state.isDoubleStrike = e.target.checked; }; 
         document.getElementById('btnClear').onclick = init;
+
+        // 🎯 新增：独立的中心裂纹视觉层
+        class CrackNode {
+            constructor(cx, cy) {
+                this.cx = cx;
+                this.cy = cy;
+                this.lines = [];
+                // 随机生成 4 到 8 条向外辐射的裂纹
+                const numLines = 4 + Math.floor(Math.random() * 5); 
+                for(let i = 0; i < numLines; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    // 长度限制在画布高度的 20% 到 50% 之间
+                    const length = (canvas.height * 0.2) + Math.random() * (canvas.height * 0.3); 
+                    this.lines.push({ angle, length });
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.cx, this.cy);
+                
+                // 处理闪烁逻辑
+                if (state.isDynamic) {
+                    const flicker = Math.random();
+                    if (flicker < 0.1) ctx.globalAlpha = 0.2;
+                    else if (flicker < 0.3) ctx.globalAlpha = 0.5;
+                    else ctx.globalAlpha = 1.0;
+                }
+
+                ctx.beginPath();
+                this.lines.forEach(l => {
+                    ctx.moveTo(0, 0);
+                    let currX = 0, currY = 0;
+                    const segments = 3; // 将一条裂纹分成3段产生折线感
+                    
+                    for(let j = 1; j <= segments; j++) {
+                        let r = (l.length / segments) * j;
+                        // 每段随机偏移一个小角度产生不规则锯齿
+                        let a = l.angle + (Math.random() - 0.5) * 0.6; 
+                        currX = Math.cos(a) * r;
+                        currY = Math.sin(a) * r;
+                        ctx.lineTo(currX, currY);
+                    }
+                });
+
+                // 绘制基础白色高光裂痕
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // 叠加一层微弱的故障色光晕
+                ctx.beginPath();
+                this.lines.forEach(l => {
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(Math.cos(l.angle) * l.length, Math.sin(l.angle) * l.length);
+                });
+                ctx.strokeStyle = Math.random() > 0.5 ? '#74ff06' : '#ff009e';
+                ctx.globalAlpha = ctx.globalAlpha * 0.4;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        }
 
         class Polygon {
             constructor(points, type = 'base', seed = null) {
@@ -228,10 +302,17 @@
 
         function init() {
             state.polygons = [new Polygon([[0, 0], [canvas.width, 0], [canvas.width, canvas.height], [0, canvas.height]], 'base', null)];
+            state.cracks = []; // 重启时清空裂纹
         }
 
-        // 🎯 核心逻辑抽象：触发一次碎裂冲击
         function triggerImpact(cx, cy) {
+            // 🎯 生成中心装饰性裂纹
+            if (state.isCracksEnabled) {
+                state.cracks.push(new CrackNode(cx, cy));
+                // 防止内存溢出，最多保留150个裂纹节点
+                if (state.cracks.length > 150) state.cracks.shift(); 
+            }
+
             const angL = (Math.random() - 0.5) * 30; 
             const angR = (Math.random() - 0.5) * 30;
             const xL = cx - (40 + Math.random() * 40);
@@ -274,12 +355,9 @@
             const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
             const my = (e.clientY - rect.top) * (canvas.height / rect.height);
             
-            // 🎯 1. 触发主点击碎裂
             triggerImpact(mx, my);
 
-            // 🎯 2. 如果开启了双击，在随机 30px 半径内额外触发一次碎裂
             if (state.isDoubleStrike) {
-                // (Math.random() - 0.5) * 60 会生成 -30 到 30 之间的随机数
                 const offsetX = (Math.random() - 0.5) * 60;
                 const offsetY = (Math.random() - 0.5) * 60;
                 triggerImpact(mx + offsetX, my + offsetY);
@@ -319,7 +397,13 @@
                 const shake = state.screenGlitch * 1.5; 
                 ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
             }
+            
+            // 1. 渲染基础切割多边形
             state.polygons.forEach(p => p.draw());
+            
+            // 2. 🎯 叠加渲染装饰性裂纹层
+            state.cracks.forEach(c => c.draw());
+
             if (state.screenGlitch > 0) {
                 if (Math.random() > 0.5) {
                     ctx.globalCompositeOperation = 'difference';
