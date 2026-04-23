@@ -2,17 +2,17 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v8.1 - 极致交互版</title>
+    <title>FRACTURE PRO v8.2 - 极致交互版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
         .branding { font-weight: 900; font-size: 14px; color: #fff; margin-right: 10px; letter-spacing: 1px; border-right: 1px solid #444; padding-right: 15px;}
         .control-group { display: flex; align-items: center; gap: 8px; background: #1a1a1a; padding: 5px 10px; border-radius: 4px; border: 1px solid #333; }
-        .control-group label { font-size: 10px; color: #888; text-transform: uppercase; }
+        .control-group label { font-size: 10px; color: #888; text-transform: uppercase; white-space: nowrap; }
         .control-group span { font-size: 10px; color: #74ff06; width: 25px; text-align: right; font-family: monospace; }
-        input[type="range"] { cursor: pointer; width: 60px; accent-color: #74ff06; }
+        input[type="range"] { cursor: pointer; width: 50px; accent-color: #74ff06; }
         
-        .switch-group { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #888; text-transform: uppercase; margin-left: 10px;}
+        .switch-group { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #888; text-transform: uppercase; margin-left: 5px;}
         .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
         .switch input { opacity: 0; width: 0; height: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .4s; border-radius: 18px; }
@@ -29,7 +29,7 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v8.1</div>
+        <div class="branding">FRACTURE_v8.2</div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="0" max="15" value="1">
@@ -40,26 +40,34 @@
             <input type="range" id="ctrlDensity" min="1" max="100" value="15">
             <span id="valDensity">15</span>
         </div>
+        
+        <div class="control-group" style="border-color: #ff009e;">
+            <label>裂纹长度%</label>
+            <input type="range" id="ctrlCrackScale" min="1" max="100" value="10">
+            <span id="valCrackScale">10</span>
+        </div>
+        <div class="control-group" style="border-color: #ff009e;">
+            <label>裂纹粗细</label>
+            <input type="range" id="ctrlCrackThick" min="1" max="10" value="1">
+            <span id="valCrackThick">1</span>
+        </div>
+        <div class="control-group" style="border-color: #ff009e;">
+            <label>高亮大小%</label>
+            <input type="range" id="ctrlBlastScale" min="0" max="100" value="5">
+            <span id="valBlastScale">5</span>
+        </div>
+
         <div class="switch-group">
-            <label>原位闪烁</label>
-            <label class="switch">
-                <input type="checkbox" id="ctrlDynamic" checked>
-                <span class="slider"></span>
-            </label>
+            <label>闪烁</label>
+            <label class="switch"><input type="checkbox" id="ctrlDynamic" checked><span class="slider"></span></label>
         </div>
         <div class="switch-group">
-            <label>装饰裂纹</label>
-            <label class="switch">
-                <input type="checkbox" id="ctrlCracks" checked>
-                <span class="slider"></span>
-            </label>
+            <label>裂纹</label>
+            <label class="switch"><input type="checkbox" id="ctrlCracks" checked><span class="slider"></span></label>
         </div>
         <div class="switch-group">
             <label>双击</label>
-            <label class="switch">
-                <input type="checkbox" id="ctrlDoubleStrike">
-                <span class="slider"></span>
-            </label>
+            <label class="switch"><input type="checkbox" id="ctrlDoubleStrike"><span class="slider"></span></label>
         </div>
         <button id="btnClear" style="margin-left: auto;">REBOOT</button>
     </div>
@@ -81,30 +89,43 @@
             impactWidth: 160,
             screenGlitch: 0, 
             polygons: [],
-            cracks: [] 
+            cracks: [],
+            
+            // 🎯 新增：裂纹系统状态变量
+            crackScale: 0.10,      // 默认10%（缩小90%）
+            crackThickness: 1,     // 默认1px
+            blastScale: 0.05       // 默认5%
         };
 
+        // 事件监听器
         document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
         document.getElementById('ctrlLineWidth').oninput = e => { state.lineWidth = parseInt(e.target.value); document.getElementById('valLineWidth').innerText = e.target.value; };
+        
+        // 🎯 新增：裂纹UI控制事件
+        document.getElementById('ctrlCrackScale').oninput = e => { state.crackScale = e.target.value / 100; document.getElementById('valCrackScale').innerText = e.target.value; };
+        document.getElementById('ctrlCrackThick').oninput = e => { state.crackThickness = parseInt(e.target.value); document.getElementById('valCrackThick').innerText = e.target.value; };
+        document.getElementById('ctrlBlastScale').oninput = e => { state.blastScale = e.target.value / 100; document.getElementById('valBlastScale').innerText = e.target.value; };
+
         document.getElementById('ctrlDynamic').onchange = e => { state.isDynamic = e.target.checked; };
         document.getElementById('ctrlCracks').onchange = e => { state.isCracksEnabled = e.target.checked; };
         document.getElementById('ctrlDoubleStrike').onchange = e => { state.isDoubleStrike = e.target.checked; }; 
         document.getElementById('btnClear').onclick = init;
 
-        // 💎 极致微调：静止爆点与 1px 微缩放射裂纹
         class CrackNode {
             constructor(cx, cy) {
                 this.cx = cx;
                 this.cy = cy;
                 this.rays = [];
                 this.webLines = []; 
+                
+                // 记录初始化的 100% 基础高亮大小
+                this.baseBlastRadius = 30 + Math.random() * 20;
 
-                // 1. 生成放射状主裂纹 (15到25条射线)
                 const numRays = 15 + Math.floor(Math.random() * 10);
                 for(let i=0; i<numRays; i++) {
                     const angle = (i / numRays) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
-                    // 🎯 长度严格缩小 80% (* 0.2)
-                    const length = ((canvas.height * 0.5) + Math.random() * 500) * 0.2; 
+                    // 记录初始化的 100% 基础裂纹长度
+                    const length = (canvas.height * 0.5) + Math.random() * 500; 
                     
                     let currentX = 0, currentY = 0;
                     let segments = [];
@@ -118,17 +139,16 @@
                         let nextY = currentY + Math.sin(rayAngle) * r;
                         segments.push({x1: currentX, y1: currentY, x2: nextX, y2: nextY});
                         
-                        // 次级蛛网线也等比例缩小 80%
+                        // 蛛网连接线的基础长度
                         if (j > 0 && Math.random() > 0.6) {
                             const webAngle = rayAngle + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2) + (Math.random()-0.5)*0.2;
-                            const webLen = (10 + Math.random() * 30) * 0.2; 
+                            const webLen = 10 + Math.random() * 30; 
                             this.webLines.push({
                                 x1: currentX, y1: currentY, 
                                 x2: currentX + Math.cos(webAngle)*webLen, 
                                 y2: currentY + Math.sin(webAngle)*webLen
                             });
                         }
-                        
                         currentX = nextX;
                         currentY = nextY;
                     }
@@ -139,51 +159,52 @@
             draw() {
                 ctx.save();
                 ctx.translate(this.cx, this.cy);
-                
-                // 🎯 强制去除闪烁，保持完全静止的物理裂痕质感
-                ctx.globalAlpha = 1.0;
+                ctx.globalAlpha = 1.0; // 强制去除闪烁
 
-                // 1. 绘制核心泄露背光 (白亮圈) - 🎯 严格缩小 95% (* 0.05)
-                const blastRadius = (30 + Math.random() * 20) * 0.05;
-                const blastGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, blastRadius);
-                blastGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-                blastGradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.9)');
-                blastGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-                
-                ctx.fillStyle = blastGradient;
-                ctx.beginPath();
-                ctx.arc(0, 0, blastRadius, 0, Math.PI * 2);
-                ctx.fill();
+                // 1. 绘制核心泄露背光（动态绑定高亮比例滑块）
+                if (state.blastScale > 0) {
+                    const blastRadius = this.baseBlastRadius * state.blastScale;
+                    const blastGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, blastRadius);
+                    blastGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+                    blastGradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.9)');
+                    blastGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                    
+                    ctx.fillStyle = blastGradient;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, blastRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
 
-                // 2. 绘制放射裂纹与蛛网线
+                // 读取滑块缩放比例
+                const scale = state.crackScale;
+
+                // 2. 绘制放射裂纹与蛛网线（实时缩放坐标点）
                 ctx.beginPath();
                 this.rays.forEach(segments => {
                     segments.forEach(seg => {
-                        ctx.moveTo(seg.x1, seg.y1);
-                        ctx.lineTo(seg.x2, seg.y2);
+                        ctx.moveTo(seg.x1 * scale, seg.y1 * scale);
+                        ctx.lineTo(seg.x2 * scale, seg.y2 * scale);
                     });
                 });
                 this.webLines.forEach(web => {
-                    ctx.moveTo(web.x1, web.y1);
-                    ctx.lineTo(web.x2, web.y2);
+                    ctx.moveTo(web.x1 * scale, web.y1 * scale);
+                    ctx.lineTo(web.x2 * scale, web.y2 * scale);
                 });
                 
-                // 🎯 严格锁定 1px，并去除所有外发光虚化(shadowBlur)
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-                ctx.lineWidth = 1;
+                ctx.lineWidth = state.crackThickness; // 动态绑定粗细滑块
                 ctx.shadowBlur = 0; 
                 ctx.stroke();
 
-                // 3. 根部细微色散层 
+                // 3. 根部细微色散层
                 ctx.beginPath();
                 this.rays.forEach(segments => {
                      let firstSeg = segments[0];
-                     ctx.moveTo(firstSeg.x1, firstSeg.y1);
-                     ctx.lineTo(firstSeg.x2, firstSeg.y2);
+                     ctx.moveTo(firstSeg.x1 * scale, firstSeg.y1 * scale);
+                     ctx.lineTo(firstSeg.x2 * scale, firstSeg.y2 * scale);
                 });
                 ctx.strokeStyle = Math.random() > 0.5 ? 'rgba(0, 255, 255, 0.5)' : 'rgba(255, 0, 255, 0.5)';
-                // 🎯 色散层也锁定 1px
-                ctx.lineWidth = 1; 
+                ctx.lineWidth = state.crackThickness; 
                 ctx.globalCompositeOperation = 'screen';
                 ctx.stroke();
 
