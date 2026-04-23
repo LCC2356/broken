@@ -64,8 +64,8 @@
         </div>
         <div class="control-group" style="border-color: #ff009e;">
             <label>裂纹粗细</label>
-            <input type="range" id="ctrlCrackThick" min="1" max="50" value="5">
-            <span id="valCrackThick">0.5</span>
+            <input type="range" id="ctrlCrackThick" min="1" max="50" value="2">
+            <span id="valCrackThick">0.2</span>
         </div>
         <div class="control-group" style="border-color: #ff009e;">
             <label>高亮%</label>
@@ -109,7 +109,7 @@
             polygons: [],
             cracks: [],
             crackScale: 0.10,      
-            crackThickness: 0.5,   
+            crackThickness: 0.2, // 修改点 3: 默认值改为 0.2
             blastScale: 0.05       
         };
 
@@ -348,14 +348,12 @@
             }
         }
 
-        // 🎯 进化1：主分裂带折线化
         function generatePolyline(xBase, my, angleDeg) {
             const path = [];
-            const segments = 15; // 增加段数带来丰富的折角
+            const segments = 15; 
             const tanA = Math.tan(angleDeg * Math.PI / 180);
             for (let i = 0; i <= segments; i++) {
                 const y = (H / segments) * i;
-                // 强制首尾两点对齐，内部节点激烈随机偏移（+/- 30px）
                 const jitter = (i === 0 || i === segments) ? 0 : (Math.random() - 0.5) * 60; 
                 const x = xBase + (y - my) * tanA + jitter;
                 path.push([x, y]);
@@ -395,13 +393,11 @@
             state.cracks = []; 
         }
 
-        // 🎯 进化2：基于共用哈希的折线中间点生成器，确保相邻碎块无缝贴合
         function getJaggedMidpoint(p1, p2) {
             const xMin = Math.min(p1[0], p2[0]), yMin = Math.min(p1[1], p2[1]);
             const xMax = Math.max(p1[0], p2[0]), yMax = Math.max(p1[1], p2[1]);
             const mx = (p1[0] + p2[0]) / 2, my = (p1[1] + p2[1]) / 2;
             
-            // 将唯一的线段两端点转化为稳定种子
             const seed = xMin * 13.1 + yMin * 17.3 + xMax * 23.5 + yMax * 29.7;
             const rand = Math.sin(seed * 12.9898) * 43758.5453;
             const frac = rand - Math.floor(rand);
@@ -409,9 +405,8 @@
             const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
             const len = Math.sqrt(dx*dx + dy*dy);
             
-            if (len < 10) return [mx, my]; // 线段太短则不弯折
+            if (len < 10) return [mx, my]; 
             
-            // 安全的最大位移，防止多边形自交翻转
             const offsetMag = Math.min(25, len * 0.2) * (frac - 0.5) * 2; 
             const nx = -dy / len, ny = dx / len;
             
@@ -482,7 +477,6 @@
             state.polygons.push(new Polygon(squarePoints, 'pink', null));
         });
 
-        // 🎯 进化3：支持5边形折角碎片的切割重构
         function shatter(points, mx, my, impactSeed) {
             const res = [];
             const center = [mx, my];
@@ -494,7 +488,6 @@
                 const type2 = Math.random() < 0.4 ? 'glitch' : 'black';
                 const getSeed = () => Math.random() < 0.5 ? impactSeed : Math.random();
 
-                // 获取确定性的共用折角点
                 const jP1Center = getJaggedMidpoint(p1, center);
                 const jMidCenter = getJaggedMidpoint(midEdge, center);
                 const jP2Center = getJaggedMidpoint(p2, center);
