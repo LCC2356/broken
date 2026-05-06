@@ -2,11 +2,11 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v8.9 - 极致随机边缘版</title>
+    <title>FRACTURE PRO v8.7 - 极致折线边缘版</title>
     <style>
-        body, html { margin: 0; padding: 0; background-color: #080808; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
-        .toolbar { background-color: #111; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #333; z-index: 10; flex-wrap: wrap; }
-        .branding { font-weight: 900; font-size: 14px; color: #74ff06; margin-right: 10px; letter-spacing: 1px; border-right: 1px solid #333; padding-right: 15px;}
+        body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+        .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
+        .branding { font-weight: 900; font-size: 14px; color: #fff; margin-right: 10px; letter-spacing: 1px; border-right: 1px solid #444; padding-right: 15px;}
         .control-group { display: flex; align-items: center; gap: 8px; background: #1a1a1a; padding: 5px 10px; border-radius: 4px; border: 1px solid #333; }
         .control-group label { font-size: 10px; color: #888; text-transform: uppercase; white-space: nowrap; }
         .control-group span { font-size: 10px; color: #74ff06; width: 25px; text-align: right; font-family: monospace; }
@@ -22,14 +22,14 @@
 
         button { background: #333; border: 1px solid #555; color: #fff; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: bold; }
         button:hover { border-color: #74ff06; color: #74ff06; }
-        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #000; padding: 20px; }
-        canvas { background-color: #74ff06; cursor: crosshair; image-rendering: pixelated; width: 2000px; height: 100px; box-shadow: 0 0 50px rgba(116, 255, 6, 0.1); }
+        .workspace { flex: 1; display: flex; justify-content: center; align-items: center; background-color: #050505; padding: 20px; }
+        canvas { background-color: #74ff06; cursor: crosshair; image-rendering: pixelated; width: 2000px; height: 100px; }
     </style>
 </head>
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v8.9</div>
+        <div class="branding">FRACTURE_v8.7</div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="1" max="150" value="5">
@@ -46,9 +46,36 @@
             <input type="range" id="ctrlHorizProb" min="0" max="100" value="10">
             <span id="valHorizProb">10</span>
         </div>
+        <div class="control-group" style="border-color: #0044FF;">
+            <label>竖线贯穿%</label>
+            <input type="range" id="ctrlPierceV" min="0" max="100" value="90">
+            <span id="valPierceV">90</span>
+        </div>
+        <div class="control-group" style="border-color: #0044FF;">
+            <label>横线贯穿%</label>
+            <input type="range" id="ctrlPierceH" min="0" max="100" value="10">
+            <span id="valPierceH">10</span>
+        </div>
+        
+        <div class="control-group" style="border-color: #ff009e;">
+            <label>裂纹长度%</label>
+            <input type="range" id="ctrlCrackScale" min="1" max="100" value="10">
+            <span id="valCrackScale">10</span>
+        </div>
+        <div class="control-group" style="border-color: #ff009e;">
+            <label>裂纹粗细</label>
+            <input type="range" id="ctrlCrackThick" min="1" max="50" value="2">
+            <span id="valCrackThick">0.2</span>
+        </div>
+        <div class="control-group" style="border-color: #ff009e;">
+            <label>高亮%</label>
+            <input type="range" id="ctrlBlastScale" min="0" max="100" value="5">
+            <span id="valBlastScale">5</span>
+        </div>
 
         <div class="switch-group"><label>闪烁</label><label class="switch"><input type="checkbox" id="ctrlDynamic" checked><span class="slider"></span></label></div>
         <div class="switch-group"><label>裂纹</label><label class="switch"><input type="checkbox" id="ctrlCracks" checked><span class="slider"></span></label></div>
+        <div class="switch-group"><label>双击</label><label class="switch"><input type="checkbox" id="ctrlDoubleStrike"><span class="slider"></span></label></div>
         <button id="btnClear" style="margin-left: auto;">REBOOT</button>
     </div>
 
@@ -60,156 +87,204 @@
         const canvas = document.getElementById('mainCanvas');
         const ctx = canvas.getContext('2d');
         
-        const W = 2000, H = 100;
+        const W = 2000;
+        const H = 100;
         const dpr = Math.max(window.devicePixelRatio || 1, 2); 
-        canvas.width = W * dpr; canvas.height = H * dpr;
+        
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
         ctx.scale(dpr, dpr);
 
         let state = {
-            density: 0.15, lineWidth: 0.5, horizProb: 0.10,
-            isDynamic: true, isCracksEnabled: true,
+            density: 0.15, lineWidth: 0.5, horizProb: 0.10, pierceV: 0.90, pierceH: 0.10,   
+            isDynamic: true, isDoubleStrike: false, isCracksEnabled: true, impactWidth: 160,
             screenGlitch: 0, polygons: [], cracks: [],
             crackScale: 0.10, crackThickness: 0.2, blastScale: 0.05       
         };
 
-        // UI 绑定
-        document.getElementById('ctrlLineWidth').oninput = e => { state.lineWidth = e.target.value / 10; document.getElementById('valLineWidth').innerText = state.lineWidth.toFixed(1); };
-        document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
+        // 绑定事件
         document.getElementById('ctrlHorizProb').oninput = e => { state.horizProb = e.target.value / 100; document.getElementById('valHorizProb').innerText = e.target.value; };
+        document.getElementById('ctrlPierceV').oninput = e => { state.pierceV = e.target.value / 100; document.getElementById('valPierceV').innerText = e.target.value; };
+        document.getElementById('ctrlPierceH').oninput = e => { state.pierceH = e.target.value / 100; document.getElementById('valPierceH').innerText = e.target.value; };
+        document.getElementById('ctrlLineWidth').oninput = e => { const val = e.target.value / 10; state.lineWidth = val; document.getElementById('valLineWidth').innerText = val.toFixed(1); };
+        document.getElementById('ctrlDensity').oninput = e => { state.density = e.target.value / 100; document.getElementById('valDensity').innerText = e.target.value; };
+        document.getElementById('ctrlCrackScale').oninput = e => { state.crackScale = e.target.value / 100; document.getElementById('valCrackScale').innerText = e.target.value; };
+        document.getElementById('ctrlCrackThick').oninput = e => { const val = e.target.value / 10; state.crackThickness = val; document.getElementById('valCrackThick').innerText = val.toFixed(1); };
+        document.getElementById('ctrlBlastScale').oninput = e => { state.blastScale = e.target.value / 100; document.getElementById('valBlastScale').innerText = e.target.value; };
         document.getElementById('ctrlDynamic').onchange = e => { state.isDynamic = e.target.checked; };
         document.getElementById('ctrlCracks').onchange = e => { state.isCracksEnabled = e.target.checked; };
+        document.getElementById('ctrlDoubleStrike').onchange = e => { state.isDoubleStrike = e.target.checked; }; 
         document.getElementById('btnClear').onclick = init;
 
-        // 核心：生成更“暴燥”的折线
-        function generateWildPolyline(xBase, angleDeg) {
+        // --- 核心修改 1: 让折线更复杂 ---
+        function generatePolyline(xBase, my, angleDeg) {
             const path = [];
-            const segments = 80; // 极高频
+            const segments = 60; // 增加段数，从 15 变成 60
             const tanA = Math.tan(angleDeg * Math.PI / 180);
-            
             for (let i = 0; i <= segments; i++) {
                 const y = (H / segments) * i;
-                // 基础漂移 + 尖锐突刺
-                let jitter = (Math.random() - 0.5) * 60;
-                if (Math.random() > 0.85) jitter *= 2.5; // 偶尔巨大的撕裂
+                // 使用更剧烈的抖动公式
+                let jitter = (i === 0 || i === segments) ? 0 : (Math.random() - 0.5) * 80;
+                if (Math.random() > 0.8) jitter *= 1.5; // 偶尔出现大的突刺
                 
-                const edgeConstraint = (i === 0 || i === segments) ? 0 : 1;
-                const x = xBase + (y - (H/2)) * tanA + (jitter * edgeConstraint);
-                path.push({x, y});
+                const x = xBase + (y - my) * tanA + jitter;
+                path.push([x, y]);
             }
             return path;
         }
 
-        class Polygon {
-            constructor(points, type = 'base') {
-                this.points = points; this.type = type; this.seed = Math.random();
+        // --- 核心修改 2: 让多边形边缘跟随折线点，不再是直线 ---
+        function sliceByPolyline(polyPoints, path) {
+            let left = [], right = [];
+            
+            const getXAtY = (y) => {
+                for (let i = 0; i < path.length - 1; i++) {
+                    if (y >= path[i][1] && y <= path[i+1][1]) {
+                        const t = (y - path[i][1]) / (path[i+1][1] - path[i][1]);
+                        return path[i][0] + t * (path[i+1][0] - path[i][0]);
+                    }
+                }
+                return path[0][0];
+            };
+
+            const getSide = (p) => p[0] - getXAtY(p[1]);
+
+            // 记录交点在 path 里的位置
+            let intersections = [];
+
+            for (let i = 0; i < polyPoints.length; i++) {
+                let p1 = polyPoints[i], p2 = polyPoints[(i + 1) % polyPoints.length];
+                let s1 = getSide(p1), s2 = getSide(p2);
+
+                if (s1 < 0) left.push(p1); else right.push(p1);
+
+                if ((s1 < 0 && s2 >= 0) || (s1 >= 0 && s2 < 0)) {
+                    let d = Math.abs(s1) + Math.abs(s2);
+                    let t = d < 0.0001 ? 0.5 : Math.abs(s1) / d;
+                    let iy = p1[1] + (p2[1] - p1[1]) * t;
+                    let ix = getXAtY(iy);
+                    let intersectPoint = [ix, iy];
+                    
+                    left.push(intersectPoint);
+                    right.push(intersectPoint);
+                    intersections.push({pos: intersectPoint, sideChange: s1 < 0 ? 'LtoR' : 'RtoL'});
+                }
+            }
+
+            // 如果有两个交点，把 path 中间的折线点补进去
+            if (intersections.length === 2) {
+                let yMin = Math.min(intersections[0].pos[1], intersections[1].pos[1]);
+                let yMax = Math.max(intersections[0].pos[1], intersections[1].pos[1]);
+                let midPath = path.filter(pt => pt[1] > yMin && pt[1] < yMax);
+                
+                // 根据切割方向决定顺着加点还是倒着加点
+                if (intersections[0].pos[1] > intersections[1].pos[1]) midPath.reverse();
+                
+                if (intersections[0].sideChange === 'LtoR') {
+                    // 交点 0 是左往右，说明接下来的 path 点属于 left 多边形的右边界
+                    left.splice(left.indexOf(intersections[0].pos) + 1, 0, ...midPath);
+                    right.splice(right.indexOf(intersections[0].pos), 0, ...[...midPath].reverse());
+                } else {
+                    right.splice(right.indexOf(intersections[0].pos) + 1, 0, ...midPath);
+                    left.splice(left.indexOf(intersections[0].pos), 0, ...[...midPath].reverse());
+                }
+            }
+
+            return [left, right];
+        }
+
+        // --- 以下保留你原本的 CrackNode, Polygon, shatter 等所有逻辑 ---
+        class CrackNode {
+            constructor(cx, cy) {
+                this.cx = cx; this.cy = cy; this.rays = []; this.webLines = []; this.baseBlastRadius = 30 + Math.random() * 20;
+                const numRays = 15 + Math.floor(Math.random() * 10);
+                for(let i=0; i<numRays; i++) {
+                    const angle = (i / numRays) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
+                    const length = (H * 0.5) + Math.random() * 500; 
+                    let currentX = 0, currentY = 0, segments = [], segCount = 10 + Math.floor(Math.random() * 15), rayAngle = angle;
+                    for(let j=0; j<segCount; j++) {
+                        let r = (length / segCount) * (0.5 + Math.random()); 
+                        if (Math.random() > 0.6) rayAngle = angle + (Math.random() - 0.5) * 0.35; 
+                        let nextX = currentX + Math.cos(rayAngle) * r, nextY = currentY + Math.sin(rayAngle) * r;
+                        segments.push({x1: currentX, y1: currentY, x2: nextX, y2: nextY});
+                        if (j > 0 && Math.random() > 0.7) {
+                            const webAngle = rayAngle + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2) + (Math.random()-0.5)*0.5;
+                            const webLen = 5 + Math.random() * 20; 
+                            this.webLines.push({ x1: currentX, y1: currentY, x2: currentX + Math.cos(webAngle)*webLen, y2: currentY + Math.sin(webAngle)*webLen });
+                        }
+                        currentX = nextX; currentY = nextY;
+                    }
+                    this.rays.push(segments);
+                }
             }
             draw() {
-                if (this.points.length < 3) return;
-                ctx.save();
+                ctx.save(); ctx.translate(this.cx, this.cy);
+                if (state.blastScale > 0) {
+                    const blastRadius = this.baseBlastRadius * state.blastScale;
+                    const blastGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, blastRadius);
+                    blastGradient.addColorStop(0, 'rgba(255, 255, 255, 1)'); blastGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                    ctx.fillStyle = blastGradient; ctx.beginPath(); ctx.arc(0, 0, blastRadius, 0, Math.PI * 2); ctx.fill();
+                }
+                const scale = state.crackScale;
                 ctx.beginPath();
-                ctx.moveTo(this.points[0].x, this.points[0].y);
-                for (let i = 1; i < this.points.length; i++) ctx.lineTo(this.points[i].x, this.points[i].y);
-                ctx.closePath();
-
-                if (this.type === 'base') {
-                    ctx.fillStyle = '#74ff06'; ctx.fill();
-                } else {
-                    ctx.fillStyle = '#000'; ctx.fill();
-                    if (this.type === 'glitch') {
-                        ctx.save(); ctx.clip(); this.drawGlitch(); ctx.restore();
-                    }
-                }
+                this.rays.forEach(segments => segments.forEach(seg => { ctx.moveTo(seg.x1 * scale, seg.y1 * scale); ctx.lineTo(seg.x2 * scale, seg.y2 * scale); }));
+                this.webLines.forEach(web => { ctx.moveTo(web.x1 * scale, web.y1 * scale); ctx.lineTo(web.x2 * scale, web.y2 * scale); });
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'; ctx.lineWidth = state.crackThickness; ctx.stroke();
                 ctx.restore();
-            }
-            drawGlitch() {
-                const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF'];
-                const step = Math.max(1, state.lineWidth * 2);
-                for (let x = 0; x < W; x += step) {
-                    if (Math.random() < state.density) {
-                        ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
-                        ctx.fillRect(x, 0, state.lineWidth, H);
-                    }
-                }
             }
         }
 
-        // 核心：重新设计的切割算法，确保边缘跟随折线点
-        function sliceWildly(targetPoints, path, side) {
-            // side: -1 为左, 1 为右
-            let resultPoints = [];
-            
-            // 1. 先加入折线的所有点（确保边缘是折线）
-            const jaggedEdge = side === -1 ? [...path] : [...path].reverse();
-            resultPoints.push(...jaggedEdge);
-
-            // 2. 加入原多边形在该侧的边界点
-            // 简单化逻辑：对于垂直碎裂，我们取原多边形最左或最右的顶点
-            const boundaryX = side === -1 ? 0 : W;
-            if (side === -1) {
-                resultPoints.push({x: 0, y: H}, {x: 0, y: 0});
-            } else {
-                resultPoints.push({x: W, y: 0}, {x: W, y: H});
+        class Polygon {
+            constructor(points, type = 'base', seed = null) { this.points = points; this.type = type; this.seed = seed !== null ? seed : Math.random(); }
+            getArea() { let area = 0; for (let i = 0; i < this.points.length; i++) { let j = (i + 1) % this.points.length; area += this.points[i][0] * this.points[j][1] - this.points[j][0] * this.points[i][1]; } return Math.abs(area) / 2; }
+            draw() {
+                if (this.points.length < 3) return;
+                ctx.save(); ctx.beginPath(); ctx.moveTo(this.points[0][0], this.points[0][1]);
+                for (let i = 1; i < this.points.length; i++) ctx.lineTo(this.points[i][0], this.points[i][1]);
+                ctx.closePath();
+                if (this.type === 'base') { ctx.fillStyle = '#74ff06'; ctx.fill(); } 
+                else if (this.type === 'pink') { ctx.fillStyle = '#ff009e'; ctx.fill(); } 
+                else { ctx.fillStyle = '#000'; ctx.fill(); if (this.type === 'glitch' && state.lineWidth > 0) { ctx.save(); ctx.clip(); this.drawGlitchLines(); ctx.restore(); } }
+                ctx.restore();
             }
-
-            return new Polygon(resultPoints, side === -1 ? 'base' : 'base');
+            drawGlitchLines() {
+                let minX = W, maxX = 0; this.points.forEach(p => { if(p[0] < minX) minX = p[0]; if(p[0] > maxX) maxX = p[0]; });
+                const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF'];
+                const w = Math.max(0.01, state.lineWidth); 
+                for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += Math.max(1, w)) {
+                    const noise = Math.abs(Math.sin(x * 12.9898 + this.seed * 78.233) * 43758.5453) % 1;
+                    if (noise < state.density) {
+                        ctx.fillStyle = colors[Math.floor(noise * colors.length)];
+                        ctx.fillRect(x, 0, w, H); 
+                    }
+                }
+            }
         }
 
         function triggerImpact(cx, cy) {
-            state.screenGlitch = 5;
-            
-            // 每次点击生成两个随机“断裂面”
-            const xL = cx - (20 + Math.random() * 40);
-            const xR = cx + (20 + Math.random() * 40);
-            const pathL = generateWildPolyline(xL, (Math.random()-0.5)*30);
-            const pathR = generateWildPolyline(xR, (Math.random()-0.5)*30);
-
-            // 构造三个多边形：左、中(故障)、右
-            // 左多边形
-            const pLeft = new Polygon([
-                ...pathL,
-                {x: 0, y: H}, {x: 0, y: 0}
-            ], 'base');
-
-            // 右多边形
-            const pRight = new Polygon([
-                ...[...pathR].reverse(),
-                {x: W, y: 0}, {x: W, y: H}
-            ], 'base');
-
-            // 中间故障区 (包含左右两条折线的点)
-            const pMid = new Polygon([
-                ...pathL,
-                ...[...pathR].reverse()
-            ], 'glitch');
-
-            state.polygons = [pLeft, pRight, pMid];
+            if (state.isCracksEnabled) state.cracks.push(new CrackNode(cx, cy));
+            const pathL = generatePolyline(cx - 50, cy, (Math.random()-0.5)*30);
+            const pathR = generatePolyline(cx + 50, cy, (Math.random()-0.5)*30);
+            let nextPolygons = [];
+            state.polygons.forEach(target => {
+                let [pLeft, pRest] = sliceByPolyline(target.points, pathL);
+                if (pRest.length > 2) {
+                    let [pMid, pRight] = sliceByPolyline(pRest, pathR);
+                    if (pMid.length > 2) nextPolygons.push(new Polygon(pMid, 'glitch'));
+                    if (pLeft.length > 2) nextPolygons.push(new Polygon(pLeft, target.type));
+                    if (pRight.length > 2) nextPolygons.push(new Polygon(pRight, target.type));
+                } else nextPolygons.push(new Polygon(pLeft, target.type));
+            });
+            state.polygons = nextPolygons.filter(p => p.getArea() > 0.5);
         }
 
-        canvas.addEventListener('mousedown', e => {
+        canvas.addEventListener('mousedown', (e) => {
             const rect = canvas.getBoundingClientRect();
-            const mx = (e.clientX - rect.left) * (W / rect.width);
-            const my = (e.clientY - rect.top) * (H / rect.height);
-            triggerImpact(mx, my);
+            triggerImpact((e.clientX - rect.left) * (W / rect.width), (e.clientY - rect.top) * (H / rect.height));
         });
 
-        function init() {
-            state.polygons = [new Polygon([{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}], 'base')];
-        }
-
-        function render() {
-            ctx.clearRect(0, 0, W, H);
-            state.polygons.forEach(p => p.draw());
-            
-            if (state.screenGlitch > 0) {
-                state.screenGlitch--;
-                if (Math.random() > 0.8) {
-                    ctx.fillStyle = 'rgba(255,255,255,0.2)';
-                    ctx.fillRect(0,0,W,H);
-                }
-            }
-            requestAnimationFrame(render);
-        }
-
+        function init() { state.polygons = [new Polygon([[0, 0], [W, 0], [W, H], [0, H]], 'base')]; state.cracks = []; }
+        function render() { ctx.clearRect(0, 0, W, H); state.polygons.forEach(p => p.draw()); state.cracks.forEach(c => c.draw()); requestAnimationFrame(render); }
         init(); render();
     </script>
 </body>
