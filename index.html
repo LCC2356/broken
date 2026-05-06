@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v8.7 - 纯粹物理折线版</title>
+    <title>FRACTURE PRO v8.8 - 极端随机折线版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -29,7 +29,7 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v8.7</div>
+        <div class="branding">FRACTURE_v8.8</div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="1" max="150" value="5">
@@ -109,7 +109,7 @@
             polygons: [],
             cracks: [],
             crackScale: 0.10,      
-            crackThickness: 0.2, // 修改点 3: 默认值改为 0.2
+            crackThickness: 0.2, 
             blastScale: 0.05       
         };
 
@@ -219,17 +219,6 @@
                 });
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'; 
                 ctx.lineWidth = state.crackThickness * 0.5; 
-                ctx.stroke();
-
-                ctx.beginPath();
-                this.rays.forEach(segments => {
-                     let firstSeg = segments[0];
-                     ctx.moveTo(firstSeg.x1 * scale, firstSeg.y1 * scale);
-                     ctx.lineTo(firstSeg.x2 * scale, firstSeg.y2 * scale);
-                });
-                ctx.strokeStyle = Math.random() > 0.5 ? 'rgba(0, 255, 255, 0.5)' : 'rgba(255, 0, 255, 0.5)';
-                ctx.lineWidth = state.crackThickness; 
-                ctx.globalCompositeOperation = 'screen';
                 ctx.stroke();
 
                 ctx.restore();
@@ -348,14 +337,26 @@
             }
         }
 
+        // 修改点：增强随机性与边缘碎裂感
         function generatePolyline(xBase, my, angleDeg) {
             const path = [];
-            const segments = 15; 
+            const segments = 40; // 增加段数，让边缘更细腻
             const tanA = Math.tan(angleDeg * Math.PI / 180);
+            
             for (let i = 0; i <= segments; i++) {
                 const y = (H / segments) * i;
-                const jitter = (i === 0 || i === segments) ? 0 : (Math.random() - 0.5) * 60; 
-                const x = xBase + (y - my) * tanA + jitter;
+                
+                // 1. 基础抖动
+                const baseJitter = (Math.random() - 0.5) * 40;
+                
+                // 2. 突刺抖动 (Spiky Random)
+                // 使用三次方让大部分点偏移小，少数点产生极大的随机跳跃
+                const spike = Math.pow(Math.random() - 0.5, 3) * 180;
+                
+                // 3. 边界锁定：确保起始和结束点稍微稳一点，中间极度混乱
+                const edgeConstraint = (i === 0 || i === segments) ? 0 : 1;
+                
+                const x = xBase + (y - my) * tanA + (baseJitter + spike) * edgeConstraint;
                 path.push([x, y]);
             }
             return path;
@@ -397,19 +398,14 @@
             const xMin = Math.min(p1[0], p2[0]), yMin = Math.min(p1[1], p2[1]);
             const xMax = Math.max(p1[0], p2[0]), yMax = Math.max(p1[1], p2[1]);
             const mx = (p1[0] + p2[0]) / 2, my = (p1[1] + p2[1]) / 2;
-            
             const seed = xMin * 13.1 + yMin * 17.3 + xMax * 23.5 + yMax * 29.7;
             const rand = Math.sin(seed * 12.9898) * 43758.5453;
             const frac = rand - Math.floor(rand);
-            
             const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
             const len = Math.sqrt(dx*dx + dy*dy);
-            
             if (len < 10) return [mx, my]; 
-            
             const offsetMag = Math.min(25, len * 0.2) * (frac - 0.5) * 2; 
             const nx = -dy / len, ny = dx / len;
-            
             return [mx + nx * offsetMag, my + ny * offsetMag];
         }
 
@@ -419,10 +415,10 @@
                 if (state.cracks.length > 150) state.cracks.shift(); 
             }
 
-            const angL = (Math.random() - 0.5) * 30; 
-            const angR = (Math.random() - 0.5) * 30;
-            const xL = cx - (40 + Math.random() * 40);
-            const xR = cx + (40 + Math.random() * 40);
+            const angL = (Math.random() - 0.5) * 40; 
+            const angR = (Math.random() - 0.5) * 40;
+            const xL = cx - (30 + Math.random() * 50);
+            const xR = cx + (30 + Math.random() * 50);
             const pathL = generatePolyline(xL, cy, angL);
             const pathR = generatePolyline(xR, cy, angR);
             
@@ -432,7 +428,7 @@
             state.polygons.forEach(target => {
                 let minX = W, maxX = 0;
                 target.points.forEach(p => { if(p[0]<minX) minX=p[0]; if(p[0]>maxX) maxX=p[0]; });
-                if (maxX < xL - 100 || minX > xR + 100) {
+                if (maxX < xL - 200 || minX > xR + 200) { // 扩大判定范围以适应更随机的线
                     nextPolygons.push(target);
                     return;
                 }
@@ -487,11 +483,9 @@
                 const type1 = Math.random() < 0.7 ? 'glitch' : 'black';
                 const type2 = Math.random() < 0.4 ? 'glitch' : 'black';
                 const getSeed = () => Math.random() < 0.5 ? impactSeed : Math.random();
-
                 const jP1Center = getJaggedMidpoint(p1, center);
                 const jMidCenter = getJaggedMidpoint(midEdge, center);
                 const jP2Center = getJaggedMidpoint(p2, center);
-                
                 res.push(new Polygon([p1, midEdge, jMidCenter, center, jP1Center], type1, getSeed()));
                 res.push(new Polygon([midEdge, p2, jP2Center, center, jMidCenter], type2, getSeed()));
             }
@@ -516,9 +510,6 @@
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; 
                     ctx.fillRect(0, 0, W, H);
                     ctx.globalCompositeOperation = 'source-over'; 
-                } else if (Math.random() > 0.7) {
-                    ctx.fillStyle = 'rgba(255, 0, 158, 0.15)'; 
-                    ctx.fillRect(0, 0, W, H);
                 }
             }
             ctx.restore(); 
