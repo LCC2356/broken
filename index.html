@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>FRACTURE PRO v8.7 - 极致折线边缘版</title>
+    <title>FRACTURE PRO v8.8 - 极端随机折线版</title>
     <style>
         body, html { margin: 0; padding: 0; background-color: #111; color: #eee; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
         .toolbar { background-color: #222; padding: 10px 20px; display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; z-index: 10; flex-wrap: wrap; }
@@ -29,7 +29,7 @@
 <body>
 
     <div class="toolbar">
-        <div class="branding">FRACTURE_v8.7</div>
+        <div class="branding">FRACTURE_v8.8</div>
         <div class="control-group">
             <label>线宽</label>
             <input type="range" id="ctrlLineWidth" min="1" max="150" value="5">
@@ -96,10 +96,21 @@
         ctx.scale(dpr, dpr);
 
         let state = {
-            density: 0.15, lineWidth: 0.5, horizProb: 0.10, pierceV: 0.90, pierceH: 0.10,   
-            isDynamic: true, isDoubleStrike: false, isCracksEnabled: true, impactWidth: 160,
-            screenGlitch: 0, polygons: [], cracks: [],
-            crackScale: 0.10, crackThickness: 0.2, blastScale: 0.05       
+            density: 0.15, 
+            lineWidth: 0.5, 
+            horizProb: 0.10, 
+            pierceV: 0.90,   
+            pierceH: 0.10,   
+            isDynamic: true,
+            isDoubleStrike: false, 
+            isCracksEnabled: true, 
+            impactWidth: 160,
+            screenGlitch: 0, 
+            polygons: [],
+            cracks: [],
+            crackScale: 0.10,      
+            crackThickness: 0.2, 
+            blastScale: 0.05       
         };
 
         // 绑定事件
@@ -111,32 +122,248 @@
         document.getElementById('ctrlCrackScale').oninput = e => { state.crackScale = e.target.value / 100; document.getElementById('valCrackScale').innerText = e.target.value; };
         document.getElementById('ctrlCrackThick').oninput = e => { const val = e.target.value / 10; state.crackThickness = val; document.getElementById('valCrackThick').innerText = val.toFixed(1); };
         document.getElementById('ctrlBlastScale').oninput = e => { state.blastScale = e.target.value / 100; document.getElementById('valBlastScale').innerText = e.target.value; };
+
         document.getElementById('ctrlDynamic').onchange = e => { state.isDynamic = e.target.checked; };
         document.getElementById('ctrlCracks').onchange = e => { state.isCracksEnabled = e.target.checked; };
         document.getElementById('ctrlDoubleStrike').onchange = e => { state.isDoubleStrike = e.target.checked; }; 
         document.getElementById('btnClear').onclick = init;
 
-        // --- 核心修改 1: 让折线更复杂 ---
+        class CrackNode {
+            constructor(cx, cy) {
+                this.cx = cx;
+                this.cy = cy;
+                this.rays = [];
+                this.webLines = []; 
+                this.baseBlastRadius = 30 + Math.random() * 20;
+
+                const numRays = 15 + Math.floor(Math.random() * 10);
+                for(let i=0; i<numRays; i++) {
+                    const angle = (i / numRays) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
+                    const length = (H * 0.5) + Math.random() * 500; 
+                    
+                    let currentX = 0, currentY = 0;
+                    let segments = [];
+                    let segCount = 10 + Math.floor(Math.random() * 15);
+                    let rayAngle = angle;
+                    
+                    for(let j=0; j<segCount; j++) {
+                        let r = (length / segCount) * (0.5 + Math.random()); 
+                        if (Math.random() > 0.6) rayAngle = angle + (Math.random() - 0.5) * 0.35; 
+                        
+                        let nextX = currentX + Math.cos(rayAngle) * r;
+                        let nextY = currentY + Math.sin(rayAngle) * r;
+                        segments.push({x1: currentX, y1: currentY, x2: nextX, y2: nextY});
+                        
+                        if (j > 0 && Math.random() > 0.7) {
+                            const webAngle = rayAngle + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2) + (Math.random()-0.5)*0.5;
+                            const webLen = 5 + Math.random() * 20; 
+                            this.webLines.push({
+                                x1: currentX, y1: currentY, 
+                                x2: currentX + Math.cos(webAngle)*webLen, 
+                                y2: currentY + Math.sin(webAngle)*webLen
+                            });
+                        }
+                        currentX = nextX;
+                        currentY = nextY;
+                    }
+                    this.rays.push(segments);
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.cx, this.cy);
+                ctx.lineJoin = 'miter'; 
+                ctx.lineCap = 'butt';
+                ctx.globalAlpha = 1.0; 
+
+                if (state.blastScale > 0) {
+                    const blastRadius = this.baseBlastRadius * state.blastScale;
+                    const blastGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, blastRadius);
+                    blastGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+                    blastGradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.9)');
+                    blastGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                    ctx.fillStyle = blastGradient;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, blastRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                const scale = state.crackScale;
+
+                ctx.beginPath();
+                this.rays.forEach(segments => {
+                    segments.forEach(seg => {
+                        ctx.moveTo(seg.x1 * scale, seg.y1 * scale);
+                        ctx.lineTo(seg.x2 * scale, seg.y2 * scale);
+                    });
+                });
+                this.webLines.forEach(web => {
+                    ctx.moveTo(web.x1 * scale, web.y1 * scale);
+                    ctx.lineTo(web.x2 * scale, web.y2 * scale);
+                });
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.lineWidth = state.crackThickness; 
+                ctx.stroke();
+
+                ctx.beginPath();
+                this.rays.forEach(segments => {
+                    segments.forEach(seg => {
+                        if (Math.random() > 0.4) {
+                            const offsetX = (Math.random() - 0.5) * 3;
+                            const offsetY = (Math.random() - 0.5) * 3;
+                            ctx.moveTo(seg.x1 * scale + offsetX, seg.y1 * scale + offsetY);
+                            ctx.lineTo(seg.x2 * scale + offsetX, seg.y2 * scale + offsetY);
+                        }
+                    });
+                });
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'; 
+                ctx.lineWidth = state.crackThickness * 0.5; 
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        }
+
+        class Polygon {
+            constructor(points, type = 'base', seed = null) {
+                this.points = points; 
+                this.type = type; 
+                this.seed = seed !== null ? seed : Math.random();
+            }
+
+            getArea() {
+                let area = 0;
+                for (let i = 0; i < this.points.length; i++) {
+                    let j = (i + 1) % this.points.length;
+                    area += this.points[i][0] * this.points[j][1] - this.points[j][0] * this.points[i][1];
+                }
+                return Math.abs(area) / 2;
+            }
+
+            draw() {
+                if (this.points.length < 3) return;
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(this.points[0][0], this.points[0][1]);
+                for (let i = 1; i < this.points.length; i++) ctx.lineTo(this.points[i][0], this.points[i][1]);
+                ctx.closePath();
+
+                if (this.type === 'base') {
+                    ctx.fillStyle = '#74ff06'; ctx.fill();
+                } else if (this.type === 'pink') {
+                    ctx.fillStyle = '#ff009e'; ctx.fill();
+                } else {
+                    ctx.fillStyle = '#000'; ctx.fill();
+                    if (this.type === 'glitch' && state.lineWidth > 0) {
+                        ctx.save();
+                        ctx.clip();
+                        this.drawGlitchLines();
+                        this.drawInnerGradient();
+                        ctx.restore();
+                    }
+                }
+
+                if (this.type !== 'base') {
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                    ctx.lineWidth = 0.5;
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+
+            drawInnerGradient() {
+                let cx = 0, cy = 0; this.points.forEach(p => { cx += p[0]; cy += p[1]; });
+                cx /= this.points.length; cy /= this.points.length;
+                const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 60);
+                grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+                grad.addColorStop(1, 'rgba(255, 255, 255, 0.25)');
+                ctx.fillStyle = grad; ctx.fill();
+            }
+
+            drawGlitchLines() {
+                let minX = W, maxX = 0;
+                let minY = H, maxY = 0;
+                this.points.forEach(p => { 
+                    if(p[0] < minX) minX = p[0]; if(p[0] > maxX) maxX = p[0]; 
+                    if(p[1] < minY) minY = p[1]; if(p[1] > maxY) maxY = p[1];
+                });
+                
+                const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF', '#FFFF00', '#000000'];
+                const w = Math.max(0.01, state.lineWidth); 
+                const step = Math.max(1, w); 
+                const isHorizontal = this.absRandom(this.seed, 99.9) < state.horizProb; 
+
+                if (!isHorizontal) {
+                    for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += step) {
+                        const isPiercing = this.absRandom(x, 111.11) < state.pierceV;
+                        const seedToUse = isPiercing ? 222.22 : this.seed;
+                        const noise = this.absRandom(x, seedToUse);
+                        
+                        if (noise < state.density) {
+                            if (state.isDynamic) {
+                                const flicker = Math.random();
+                                if (flicker < 0.1) continue;
+                                if (flicker < 0.3) ctx.globalAlpha = 0.4;
+                            }
+                            ctx.fillStyle = colors[Math.floor(noise * colors.length * 13) % colors.length];
+                            ctx.fillRect(x, 0, w, H); 
+                            ctx.globalAlpha = 1.0;
+                        }
+                    }
+                } else {
+                    for (let y = Math.floor(minY); y <= Math.ceil(maxY); y += step) {
+                        const isPiercing = this.absRandom(y, 333.33) < state.pierceH;
+                        const seedToUse = isPiercing ? 444.44 : this.seed;
+                        const noise = this.absRandom(y, seedToUse + 500); 
+                        
+                        if (noise < state.density) {
+                            if (state.isDynamic) {
+                                const flicker = Math.random();
+                                if (flicker < 0.1) continue;
+                                if (flicker < 0.3) ctx.globalAlpha = 0.4;
+                            }
+                            ctx.fillStyle = colors[Math.floor(noise * colors.length * 13) % colors.length];
+                            ctx.fillRect(0, y, W, w); 
+                            ctx.globalAlpha = 1.0;
+                        }
+                    }
+                }
+            }
+
+            absRandom(x, s) {
+                let val = Math.sin(x * 12.9898 + s * 78.233) * 43758.5453;
+                return val - Math.floor(val);
+            }
+        }
+
+        // 修改点：增强随机性与边缘碎裂感
         function generatePolyline(xBase, my, angleDeg) {
             const path = [];
-            const segments = 60; // 增加段数，从 15 变成 60
+            const segments = 40; // 增加段数，让边缘更细腻
             const tanA = Math.tan(angleDeg * Math.PI / 180);
+            
             for (let i = 0; i <= segments; i++) {
                 const y = (H / segments) * i;
-                // 使用更剧烈的抖动公式
-                let jitter = (i === 0 || i === segments) ? 0 : (Math.random() - 0.5) * 80;
-                if (Math.random() > 0.8) jitter *= 1.5; // 偶尔出现大的突刺
                 
-                const x = xBase + (y - my) * tanA + jitter;
+                // 1. 基础抖动
+                const baseJitter = (Math.random() - 0.5) * 40;
+                
+                // 2. 突刺抖动 (Spiky Random)
+                // 使用三次方让大部分点偏移小，少数点产生极大的随机跳跃
+                const spike = Math.pow(Math.random() - 0.5, 3) * 180;
+                
+                // 3. 边界锁定：确保起始和结束点稍微稳一点，中间极度混乱
+                const edgeConstraint = (i === 0 || i === segments) ? 0 : 1;
+                
+                const x = xBase + (y - my) * tanA + (baseJitter + spike) * edgeConstraint;
                 path.push([x, y]);
             }
             return path;
         }
 
-        // --- 核心修改 2: 让多边形边缘跟随折线点，不再是直线 ---
         function sliceByPolyline(polyPoints, path) {
             let left = [], right = [];
-            
             const getXAtY = (y) => {
                 for (let i = 0; i < path.length - 1; i++) {
                     if (y >= path[i][1] && y <= path[i+1][1]) {
@@ -146,145 +373,159 @@
                 }
                 return path[0][0];
             };
-
             const getSide = (p) => p[0] - getXAtY(p[1]);
-
-            // 记录交点在 path 里的位置
-            let intersections = [];
-
             for (let i = 0; i < polyPoints.length; i++) {
                 let p1 = polyPoints[i], p2 = polyPoints[(i + 1) % polyPoints.length];
                 let s1 = getSide(p1), s2 = getSide(p2);
-
                 if (s1 < 0) left.push(p1); else right.push(p1);
-
                 if ((s1 < 0 && s2 >= 0) || (s1 >= 0 && s2 < 0)) {
                     let d = Math.abs(s1) + Math.abs(s2);
                     let t = d < 0.0001 ? 0.5 : Math.abs(s1) / d;
                     let iy = p1[1] + (p2[1] - p1[1]) * t;
                     let ix = getXAtY(iy);
-                    let intersectPoint = [ix, iy];
-                    
-                    left.push(intersectPoint);
-                    right.push(intersectPoint);
-                    intersections.push({pos: intersectPoint, sideChange: s1 < 0 ? 'LtoR' : 'RtoL'});
+                    left.push([ix, iy]); right.push([ix, iy]);
                 }
             }
-
-            // 如果有两个交点，把 path 中间的折线点补进去
-            if (intersections.length === 2) {
-                let yMin = Math.min(intersections[0].pos[1], intersections[1].pos[1]);
-                let yMax = Math.max(intersections[0].pos[1], intersections[1].pos[1]);
-                let midPath = path.filter(pt => pt[1] > yMin && pt[1] < yMax);
-                
-                // 根据切割方向决定顺着加点还是倒着加点
-                if (intersections[0].pos[1] > intersections[1].pos[1]) midPath.reverse();
-                
-                if (intersections[0].sideChange === 'LtoR') {
-                    // 交点 0 是左往右，说明接下来的 path 点属于 left 多边形的右边界
-                    left.splice(left.indexOf(intersections[0].pos) + 1, 0, ...midPath);
-                    right.splice(right.indexOf(intersections[0].pos), 0, ...[...midPath].reverse());
-                } else {
-                    right.splice(right.indexOf(intersections[0].pos) + 1, 0, ...midPath);
-                    left.splice(left.indexOf(intersections[0].pos), 0, ...[...midPath].reverse());
-                }
-            }
-
             return [left, right];
         }
 
-        // --- 以下保留你原本的 CrackNode, Polygon, shatter 等所有逻辑 ---
-        class CrackNode {
-            constructor(cx, cy) {
-                this.cx = cx; this.cy = cy; this.rays = []; this.webLines = []; this.baseBlastRadius = 30 + Math.random() * 20;
-                const numRays = 15 + Math.floor(Math.random() * 10);
-                for(let i=0; i<numRays; i++) {
-                    const angle = (i / numRays) * Math.PI * 2 + (Math.random() - 0.5) * 0.2;
-                    const length = (H * 0.5) + Math.random() * 500; 
-                    let currentX = 0, currentY = 0, segments = [], segCount = 10 + Math.floor(Math.random() * 15), rayAngle = angle;
-                    for(let j=0; j<segCount; j++) {
-                        let r = (length / segCount) * (0.5 + Math.random()); 
-                        if (Math.random() > 0.6) rayAngle = angle + (Math.random() - 0.5) * 0.35; 
-                        let nextX = currentX + Math.cos(rayAngle) * r, nextY = currentY + Math.sin(rayAngle) * r;
-                        segments.push({x1: currentX, y1: currentY, x2: nextX, y2: nextY});
-                        if (j > 0 && Math.random() > 0.7) {
-                            const webAngle = rayAngle + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2) + (Math.random()-0.5)*0.5;
-                            const webLen = 5 + Math.random() * 20; 
-                            this.webLines.push({ x1: currentX, y1: currentY, x2: currentX + Math.cos(webAngle)*webLen, y2: currentY + Math.sin(webAngle)*webLen });
-                        }
-                        currentX = nextX; currentY = nextY;
-                    }
-                    this.rays.push(segments);
-                }
-            }
-            draw() {
-                ctx.save(); ctx.translate(this.cx, this.cy);
-                if (state.blastScale > 0) {
-                    const blastRadius = this.baseBlastRadius * state.blastScale;
-                    const blastGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, blastRadius);
-                    blastGradient.addColorStop(0, 'rgba(255, 255, 255, 1)'); blastGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-                    ctx.fillStyle = blastGradient; ctx.beginPath(); ctx.arc(0, 0, blastRadius, 0, Math.PI * 2); ctx.fill();
-                }
-                const scale = state.crackScale;
-                ctx.beginPath();
-                this.rays.forEach(segments => segments.forEach(seg => { ctx.moveTo(seg.x1 * scale, seg.y1 * scale); ctx.lineTo(seg.x2 * scale, seg.y2 * scale); }));
-                this.webLines.forEach(web => { ctx.moveTo(web.x1 * scale, web.y1 * scale); ctx.lineTo(web.x2 * scale, web.y2 * scale); });
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'; ctx.lineWidth = state.crackThickness; ctx.stroke();
-                ctx.restore();
-            }
+        function init() {
+            state.polygons = [new Polygon([[0, 0], [W, 0], [W, H], [0, H]], 'base', null)];
+            state.cracks = []; 
         }
 
-        class Polygon {
-            constructor(points, type = 'base', seed = null) { this.points = points; this.type = type; this.seed = seed !== null ? seed : Math.random(); }
-            getArea() { let area = 0; for (let i = 0; i < this.points.length; i++) { let j = (i + 1) % this.points.length; area += this.points[i][0] * this.points[j][1] - this.points[j][0] * this.points[i][1]; } return Math.abs(area) / 2; }
-            draw() {
-                if (this.points.length < 3) return;
-                ctx.save(); ctx.beginPath(); ctx.moveTo(this.points[0][0], this.points[0][1]);
-                for (let i = 1; i < this.points.length; i++) ctx.lineTo(this.points[i][0], this.points[i][1]);
-                ctx.closePath();
-                if (this.type === 'base') { ctx.fillStyle = '#74ff06'; ctx.fill(); } 
-                else if (this.type === 'pink') { ctx.fillStyle = '#ff009e'; ctx.fill(); } 
-                else { ctx.fillStyle = '#000'; ctx.fill(); if (this.type === 'glitch' && state.lineWidth > 0) { ctx.save(); ctx.clip(); this.drawGlitchLines(); ctx.restore(); } }
-                ctx.restore();
-            }
-            drawGlitchLines() {
-                let minX = W, maxX = 0; this.points.forEach(p => { if(p[0] < minX) minX = p[0]; if(p[0] > maxX) maxX = p[0]; });
-                const colors = ['#FF0033', '#0044FF', '#FF00FF', '#00FFFF', '#FFFFFF'];
-                const w = Math.max(0.01, state.lineWidth); 
-                for (let x = Math.floor(minX); x <= Math.ceil(maxX); x += Math.max(1, w)) {
-                    const noise = Math.abs(Math.sin(x * 12.9898 + this.seed * 78.233) * 43758.5453) % 1;
-                    if (noise < state.density) {
-                        ctx.fillStyle = colors[Math.floor(noise * colors.length)];
-                        ctx.fillRect(x, 0, w, H); 
-                    }
-                }
-            }
+        function getJaggedMidpoint(p1, p2) {
+            const xMin = Math.min(p1[0], p2[0]), yMin = Math.min(p1[1], p2[1]);
+            const xMax = Math.max(p1[0], p2[0]), yMax = Math.max(p1[1], p2[1]);
+            const mx = (p1[0] + p2[0]) / 2, my = (p1[1] + p2[1]) / 2;
+            const seed = xMin * 13.1 + yMin * 17.3 + xMax * 23.5 + yMax * 29.7;
+            const rand = Math.sin(seed * 12.9898) * 43758.5453;
+            const frac = rand - Math.floor(rand);
+            const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
+            const len = Math.sqrt(dx*dx + dy*dy);
+            if (len < 10) return [mx, my]; 
+            const offsetMag = Math.min(25, len * 0.2) * (frac - 0.5) * 2; 
+            const nx = -dy / len, ny = dx / len;
+            return [mx + nx * offsetMag, my + ny * offsetMag];
         }
 
         function triggerImpact(cx, cy) {
-            if (state.isCracksEnabled) state.cracks.push(new CrackNode(cx, cy));
-            const pathL = generatePolyline(cx - 50, cy, (Math.random()-0.5)*30);
-            const pathR = generatePolyline(cx + 50, cy, (Math.random()-0.5)*30);
+            if (state.isCracksEnabled) {
+                state.cracks.push(new CrackNode(cx, cy));
+                if (state.cracks.length > 150) state.cracks.shift(); 
+            }
+
+            const angL = (Math.random() - 0.5) * 40; 
+            const angR = (Math.random() - 0.5) * 40;
+            const xL = cx - (30 + Math.random() * 50);
+            const xR = cx + (30 + Math.random() * 50);
+            const pathL = generatePolyline(xL, cy, angL);
+            const pathR = generatePolyline(xR, cy, angR);
+            
             let nextPolygons = [];
+            const impactSeed = Math.random();
+            
             state.polygons.forEach(target => {
+                let minX = W, maxX = 0;
+                target.points.forEach(p => { if(p[0]<minX) minX=p[0]; if(p[0]>maxX) maxX=p[0]; });
+                if (maxX < xL - 200 || minX > xR + 200) { // 扩大判定范围以适应更随机的线
+                    nextPolygons.push(target);
+                    return;
+                }
                 let [pLeft, pRest] = sliceByPolyline(target.points, pathL);
                 if (pRest.length > 2) {
                     let [pMid, pRight] = sliceByPolyline(pRest, pathR);
-                    if (pMid.length > 2) nextPolygons.push(new Polygon(pMid, 'glitch'));
-                    if (pLeft.length > 2) nextPolygons.push(new Polygon(pLeft, target.type));
-                    if (pRight.length > 2) nextPolygons.push(new Polygon(pRight, target.type));
-                } else nextPolygons.push(new Polygon(pLeft, target.type));
+                    if (pMid.length > 2) {
+                        const fragments = shatter(pMid, cx, cy, impactSeed);
+                        nextPolygons.push(...fragments);
+                    }
+                    if (pLeft.length > 2) nextPolygons.push(new Polygon(pLeft, target.type, target.seed));
+                    if (pRight.length > 2) nextPolygons.push(new Polygon(pRight, target.type, target.seed));
+                } else {
+                    if (pLeft.length > 2) nextPolygons.push(new Polygon(pLeft, target.type, target.seed));
+                }
             });
-            state.polygons = nextPolygons.filter(p => p.getArea() > 0.5);
+            
+            state.polygons = nextPolygons.filter(p => p.getArea() > 0.5).slice(0, 1000);
         }
 
         canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 2) return;
+            state.screenGlitch = 8; 
             const rect = canvas.getBoundingClientRect();
-            triggerImpact((e.clientX - rect.left) * (W / rect.width), (e.clientY - rect.top) * (H / rect.height));
+            const mx = (e.clientX - rect.left) * (W / rect.width);
+            const my = (e.clientY - rect.top) * (H / rect.height);
+            triggerImpact(mx, my);
+
+            if (state.isDoubleStrike) {
+                const offsetX = (Math.random() - 0.5) * 60;
+                const offsetY = (Math.random() - 0.5) * 60;
+                triggerImpact(mx + offsetX, my + offsetY);
+            }
         });
 
-        function init() { state.polygons = [new Polygon([[0, 0], [W, 0], [W, H], [0, H]], 'base')]; state.cracks = []; }
-        function render() { ctx.clearRect(0, 0, W, H); state.polygons.forEach(p => p.draw()); state.cracks.forEach(c => c.draw()); requestAnimationFrame(render); }
+        canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); 
+            const rect = canvas.getBoundingClientRect();
+            const mx = (e.clientX - rect.left) * (W / rect.width);
+            const half = H / 2;
+            const squarePoints = [[mx - half, 0], [mx + half, 0], [mx + half, H], [mx - half, H]];
+            state.polygons.push(new Polygon(squarePoints, 'pink', null));
+        });
+
+        function shatter(points, mx, my, impactSeed) {
+            const res = [];
+            const center = [mx, my];
+            for (let i = 0; i < points.length; i++) {
+                const p1 = points[i], p2 = points[(i + 1) % points.length];
+                const r = 0.3 + Math.random() * 0.4;
+                const midEdge = [p1[0] + (p2[0]-p1[0])*r, p1[1] + (p2[1]-p1[1])*r];
+                const type1 = Math.random() < 0.7 ? 'glitch' : 'black';
+                const type2 = Math.random() < 0.4 ? 'glitch' : 'black';
+                const getSeed = () => Math.random() < 0.5 ? impactSeed : Math.random();
+                const jP1Center = getJaggedMidpoint(p1, center);
+                const jMidCenter = getJaggedMidpoint(midEdge, center);
+                const jP2Center = getJaggedMidpoint(p2, center);
+                res.push(new Polygon([p1, midEdge, jMidCenter, center, jP1Center], type1, getSeed()));
+                res.push(new Polygon([midEdge, p2, jP2Center, center, jMidCenter], type2, getSeed()));
+            }
+            return res;
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, W, H);
+            ctx.save(); 
+            if (state.screenGlitch > 0) {
+                state.screenGlitch--;
+                const shake = state.screenGlitch * 1.5; 
+                ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+            }
+            
+            state.polygons.forEach(p => p.draw());
+            state.cracks.forEach(c => c.draw());
+
+            if (state.screenGlitch > 0) {
+                if (Math.random() > 0.5) {
+                    ctx.globalCompositeOperation = 'difference';
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; 
+                    ctx.fillRect(0, 0, W, H);
+                    ctx.globalCompositeOperation = 'source-over'; 
+                }
+            }
+            ctx.restore(); 
+            
+            if (state.screenGlitch > 0 && Math.random() > 0.3) {
+                ctx.save();
+                ctx.setTransform(1, 0, 0, 1, 0, 0); 
+                const sliceY = Math.random() * canvas.height;
+                const sliceH = (Math.random() * 8 + 2) * dpr; 
+                const offset = (Math.random() - 0.5) * 40 * dpr;
+                ctx.drawImage(canvas, 0, sliceY, canvas.width, sliceH, offset, sliceY, canvas.width, sliceH);
+                ctx.restore();
+            }
+            requestAnimationFrame(render);
+        }
+
         init(); render();
     </script>
 </body>
